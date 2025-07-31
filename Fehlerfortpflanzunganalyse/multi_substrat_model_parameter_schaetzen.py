@@ -67,7 +67,7 @@ print("Hinweis: Dies kann mehrere Minuten dauern!")
 mc_results = monte_carlo_simulation(
     activ_param,
     model_name,
-    n_iterations=5000,             # Weniger Iterationen für Test
+    n_iterations=500,             # Weniger Iterationen für Test
     noise_level_calibration=0.02,  # 2% Rauschen in Kalibrierung
     noise_level_kinetics=0.03      # 3% Rauschen in Kinetikdaten
 )
