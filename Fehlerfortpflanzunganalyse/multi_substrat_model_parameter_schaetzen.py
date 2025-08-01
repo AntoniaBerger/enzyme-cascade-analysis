@@ -2,9 +2,9 @@ from parameter_schaetzen_noise import *
 
 # Parameter für die Messung - WICHTIG: Korrekte Werte eingeben!
 activ_param = {
-    "Vf_well": 1.0,      # Verdünnungsfaktor der Gesamtansatzlösung im Well (z.B. 1.5 für 1:1.5)
-    "Vf_prod": 1.0,      # Verdünnungsfaktor der Proteinlösung (z.B. 10 für 1:10) 
-    "c_prod": 1.0        # Proteinkonzentration [mg/L] (z.B. 0.5 mg/L)
+    "Vf_well": 1.0,      # Verdünnungsfaktor der Gesamtansatzlösung im Well 
+    "Vf_prod": 10.0,      # Verdünnungsfaktor der Proteinlösung 
+    "c_prod": 2.2108        # Proteinkonzentration [mg/L] 
 }
 
 # Zwei-Substrat-Modell auswählen
@@ -14,10 +14,6 @@ print("=" * 80)
 print("=== ZWEI-SUBSTRAT MICHAELIS-MENTEN PARAMETERSCHÄTZUNG ===")
 print("=" * 80)
 
-print(f"\n=== VERFÜGBARE MODELLE ===")
-for name, info in AVAILABLE_MODELS.items():
-    params_str = ", ".join([f"{p} [{u}]" for p, u in zip(info['param_names'], info['param_units'])])
-    print(f"- {name}: {info['description']} (Parameter: {params_str})")
 
 print(f"\n=== ORIGINALDATEN ANALYSE ===")
 print(f"Verwendetes Modell: {model_name}")

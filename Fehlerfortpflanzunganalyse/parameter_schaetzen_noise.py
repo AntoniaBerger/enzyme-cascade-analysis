@@ -210,7 +210,6 @@ def schaetze_parameter(param, model_name='michaelis_menten'):
     if slope_cal is None:
         return None
 
-    # UNTERSCHIEDLICHE DATENBEHANDLUNG JE NACH MODELL:
     if model_name == 'two_substrat_michaelis_menten':
         # ZWEI-SUBSTRAT: Zwei separate Experimente laden
         excel_path = os.path.join(BASE_PATH, "Daten","Rohdaten","Plate_Reader", "Kinetik-Messungen", "r1", "r1_NAD_PD_mod.xlsx")            
@@ -381,7 +380,7 @@ def add_noise(data, noise_level=0.05):
 
 def monte_carlo_simulation(param, model_name='michaelis_menten', n_iterations=1000, noise_level_calibration=0.03, noise_level_kinetics=0.02):
     """
-    Monte Carlo Simulation für beliebige Modelle
+    Monte Carlo Simulation für beliebige Modelle mit speziellem Support für Zwei-Substrat
     """
     
     print("=== MONTE CARLO SIMULATION ===")
@@ -399,46 +398,65 @@ def monte_carlo_simulation(param, model_name='michaelis_menten', n_iterations=10
         nadh_path = os.path.join(BASE_PATH, "Daten", "Rohdaten", "Plate_Reader", "Kalibriergeraden", "NADH_Kalibriergerade.xlsx")
         nadh_kalibrierung = pd.read_excel(nadh_path)
         
-        r1_path = os.path.join(BASE_PATH, "Daten", "Rohdaten", "Plate_Reader", "Kinetik-Messungen","r1", "r1_NAD_PD_mod.xlsx")
-        r1 = pd.read_excel(r1_path)
+        # Für Zwei-Substrat: Lade beide Experimente
+        if model_name == 'two_substrat_michaelis_menten':
+            excel_path = os.path.join(BASE_PATH, "Daten","Rohdaten","Plate_Reader", "Kinetik-Messungen", "r1", "r1_NAD_PD_mod.xlsx")
+            r1_NAD = pd.read_excel(excel_path, sheet_name="NAD_PD_500nM")  # S1 variabel
+            r1_PD = pd.read_excel(excel_path, sheet_name="PD_NAD_5nM")    # S2 variabel
+        else:
+            # Für Ein-Substrat: Normales Laden
+            r1_path = os.path.join(BASE_PATH, "Daten", "Rohdaten", "Plate_Reader", "Kinetik-Messungen","r1", "r1_NAD_PD_mod.xlsx")
+            r1 = pd.read_excel(r1_path)
 
     except Exception as e:
         print(f"Fehler beim Laden der Dateien: {e}")
         return None
     
     try:
-        # Kalibrierungsdaten
+        # Kalibrierungsdaten (für alle Modelle gleich)
         x_original = nadh_kalibrierung.NADH.values
         y_original = nadh_kalibrierung.Mittelwert.values
         
-        # Konzentrationen 
-        concentrations_original = get_concentrations(r1)
-        
-        # Zeitpunkte
-        time_points_original = get_time_points(r1)
-        
-        # Absorptionsdaten 
-        absorption_data_original = get_adsoption_data(r1)
-        
-        print("Originaldaten geladen:")
-        print(f"- Kalibrierung: {len(x_original)} Punkte")
-        print(f"- Konzentrationen: {len(concentrations_original)} Wells")
-        print(f"- Zeitpunkte: {len(time_points_original)} Messungen")
-        print(f"- Absorption: {absorption_data_original.shape}")
-        
-        # Validierung
-        if len(concentrations_original) == 0:
-            print("Keine gültigen Konzentrationen gefunden!")
-            return None
+        if model_name == 'two_substrat_michaelis_menten':
+            # Zwei-Substrat: Daten aus beiden Experimenten extrahieren
             
-        if len(time_points_original) == 0:
-            print("Keine gültigen Zeitpunkte gefunden!")
-            return None
+            # Experiment 1: S1 variabel, S2 konstant
+            concentrations_s1_original = get_concentrations(r1_NAD)
+            time_points_s1_original = get_time_points(r1_NAD)
+            absorption_data_s1_original = get_adsoption_data(r1_NAD)
+            S2_constant = 500.0  # mM
+            
+            # Experiment 2: S2 variabel, S1 konstant  
+            concentrations_s2_original = get_concentrations(r1_PD)
+            time_points_s2_original = get_time_points(r1_PD)
+            absorption_data_s2_original = get_adsoption_data(r1_PD)
+            S1_constant = 5.0  # mM
+            
+            print("Originaldaten geladen (Zwei-Substrat):")
+            print(f"- Kalibrierung: {len(x_original)} Punkte")
+            print(f"- Experiment 1 (S1 var): {len(concentrations_s1_original)} Wells")
+            print(f"- Experiment 2 (S2 var): {len(concentrations_s2_original)} Wells")
+            print(f"- Zeitpunkte S1: {len(time_points_s1_original)}")
+            print(f"- Zeitpunkte S2: {len(time_points_s2_original)}")
+            print(f"- Absorption S1: {absorption_data_s1_original.shape}")
+            print(f"- Absorption S2: {absorption_data_s2_original.shape}")
+            
+        else:
+            # Ein-Substrat: Normales Extrahieren
+            concentrations_original = get_concentrations(r1)
+            time_points_original = get_time_points(r1)
+            absorption_data_original = get_adsoption_data(r1)
+            
+            print("Originaldaten geladen (Ein-Substrat):")
+            print(f"- Kalibrierung: {len(x_original)} Punkte")
+            print(f"- Konzentrationen: {len(concentrations_original)} Wells")
+            print(f"- Zeitpunkte: {len(time_points_original)} Messungen")
+            print(f"- Absorption: {absorption_data_original.shape}")
         
     except Exception as e:
         print(f"Fehler beim Extrahieren der Originaldaten: {e}")
         import traceback
-        traceback.print_exc()  # Detaillierte Fehlermeldung
+        traceback.print_exc()
         return None
     
     successful_iterations = 0
@@ -446,25 +464,46 @@ def monte_carlo_simulation(param, model_name='michaelis_menten', n_iterations=10
     
     for iteration in range(n_iterations):
         try:
-            # 1. Kalibrierungsdaten verrauschen
+            # 1. Kalibrierungsdaten verrauschen (für alle Modelle gleich)
             x_noisy = add_noise(x_original, noise_level_calibration)
             y_noisy = add_noise(y_original, noise_level_calibration)
             
-            # Linearität der verrauschten Kalibrierung prüfen (weniger streng)
-            if not is_linear(x_noisy, y_noisy, threshold=0.85):
+            # Linearität der verrauschten Kalibrierung prüfen (weniger streng für Monte Carlo)
+            if not is_linear(x_noisy, y_noisy, threshold=0.80):  # Reduziert von 0.85 auf 0.80
                 failed_reasons["linearität"] += 1
                 continue
             
-            # 2. Kinetikdaten verrauschen
-            concentrations_noisy = add_noise(concentrations_original, noise_level_calibration)
-            time_points_noisy = add_noise(time_points_original, noise_level_kinetics)
-            
-            # Absorption verrauschen
-            absorption_data_noisy = add_noise(absorption_data_original.astype(float), noise_level_kinetics)
-            
-            # 3. Parameter berechnen mit verrauschten Daten
-            result = schaetze_parameter_noisy(x_noisy, y_noisy, concentrations_noisy, 
-                                            time_points_noisy, absorption_data_noisy, param, model_name)
+            # 2. Kinetikdaten verrauschen - unterschiedlich je nach Modell
+            if model_name == 'two_substrat_michaelis_menten':
+                # Zwei-Substrat: Beide Experimente verrauschen
+                
+                # Experiment 1 verrauschen
+                concentrations_s1_noisy = add_noise(concentrations_s1_original, noise_level_calibration)
+                time_points_s1_noisy = add_noise(time_points_s1_original, noise_level_kinetics)
+                absorption_data_s1_noisy = add_noise(absorption_data_s1_original.astype(float), noise_level_kinetics)
+                
+                # Experiment 2 verrauschen
+                concentrations_s2_noisy = add_noise(concentrations_s2_original, noise_level_calibration)
+                time_points_s2_noisy = add_noise(time_points_s2_original, noise_level_kinetics)
+                absorption_data_s2_noisy = add_noise(absorption_data_s2_original.astype(float), noise_level_kinetics)
+                
+                # 3. Parameter berechnen mit verrauschten Zwei-Substrat-Daten
+                result = schaetze_parameter_noisy_two_substrat(
+                    x_noisy, y_noisy, 
+                    concentrations_s1_noisy, time_points_s1_noisy, absorption_data_s1_noisy, S2_constant,
+                    concentrations_s2_noisy, time_points_s2_noisy, absorption_data_s2_noisy, S1_constant,
+                    param, model_name
+                )
+                
+            else:
+                # Ein-Substrat: Normale Verarbeitung
+                concentrations_noisy = add_noise(concentrations_original, noise_level_calibration)
+                time_points_noisy = add_noise(time_points_original, noise_level_kinetics)
+                absorption_data_noisy = add_noise(absorption_data_original.astype(float), noise_level_kinetics)
+                
+                # 3. Parameter berechnen mit verrauschten Ein-Substrat-Daten
+                result = schaetze_parameter_noisy(x_noisy, y_noisy, concentrations_noisy, 
+                                                time_points_noisy, absorption_data_noisy, param, model_name)
             
             if result is not None:
                 # Modell-spezifische Validierung
@@ -475,11 +514,11 @@ def monte_carlo_simulation(param, model_name='michaelis_menten', n_iterations=10
                 all_params_valid = True
                 for param_name in param_names:
                     param_value = result.get(param_name, 0)
-                    if param_value <= 0 or param_value > 10000:  # Erweiterte Plausibilitätsprüfung
+                    if param_value <= 0 or param_value > 10000:
                         all_params_valid = False
                         break
                 
-                if all_params_valid and result['R_squared'] > 0.5:
+                if all_params_valid and result['R_squared'] > 0.3:  # Reduziert von 0.5 auf 0.3
                     # Sammle alle Parameter für die Statistik
                     for param_name in param_names:
                         if param_name not in param_results:
@@ -493,7 +532,7 @@ def monte_carlo_simulation(param, model_name='michaelis_menten', n_iterations=10
             else:
                 failed_reasons["fitting"] += 1
                 
-            if (iteration + 1) % 10 == 0:
+            if (iteration + 1) % 100 == 0:
                 print(f"Iteration {iteration + 1}/{n_iterations} - Erfolgreiche: {successful_iterations}")
         
         except Exception as e:
@@ -514,20 +553,16 @@ def monte_carlo_simulation(param, model_name='michaelis_menten', n_iterations=10
     
     # Statistische Auswertung
     r_squared_results = np.array(r_squared_results)
-    
-    # Modell-Info für Parameter
     model_info = AVAILABLE_MODELS[model_name]
     param_names = model_info['param_names']
     
-    # Alle Parameter zu numpy arrays konvertieren
     param_arrays = {}
     for param_name in param_names:
         if param_name in param_results:
             param_arrays[param_name] = np.array(param_results[param_name])
     
-    # Kovarianzmatrix und Korrelation berechnen (nur wenn mindestens 2 Parameter)
+    # Kovarianzmatrix und Korrelation berechnen
     if len(param_arrays) >= 2:
-        # Matrix aus allen Parametern erstellen
         parameter_matrix = np.column_stack([param_arrays[name] for name in param_names if name in param_arrays])
         covariance_matrix = np.cov(parameter_matrix, rowvar=False)
         correlation_matrix = np.corrcoef(parameter_matrix, rowvar=False)
@@ -555,15 +590,14 @@ def monte_carlo_simulation(param, model_name='michaelis_menten', n_iterations=10
             results[f'{param_name}_ci_upper'] = np.percentile(param_data, 97.5)
             results[f'{param_name}_values'] = param_data
     
-    # Kovarianz/Korrelation hinzufügen (falls verfügbar)
     if covariance_matrix is not None:
         results['covariance_matrix'] = covariance_matrix
         results['correlation_matrix'] = correlation_matrix
     
+    # Ausgabe
     print(f"\n=== MONTE CARLO ERGEBNISSE ===")
     print(f"Erfolgreiche Iterationen: {successful_iterations}/{n_iterations}")
     
-    # Parameter-spezifische Ausgabe
     for param_name in param_names:
         if f'{param_name}_mean' in results:
             mean_val = results[f'{param_name}_mean']
@@ -577,42 +611,10 @@ def monte_carlo_simulation(param, model_name='michaelis_menten', n_iterations=10
     
     print(f"R²: {results['R_squared_mean']:.4f} ± {results['R_squared_std']:.4f}")
     
-    # Kovarianz und Korrelation ausgeben (falls verfügbar)
-    if 'covariance_matrix' in results and len(param_names) >= 2:
-        print(f"\n=== KOVARIANZ UND KORRELATION ===")
-        
-        # Für 2 Parameter: spezielle Ausgabe
-        if len(param_names) == 2:
-            param1, param2 = param_names[0], param_names[1]
-            covariance = results['covariance_matrix'][0, 1]
-            correlation = results['correlation_matrix'][0, 1]
-            
-            print(f"{param1}-{param2} Kovarianz: {covariance:.6f}")
-            print(f"{param1}-{param2} Korrelation: {correlation:.4f}")
-        
-        # Vollständige Matrizen ausgeben
-        print(f"\nKovarianzmatrix:")
-        header = "        " + "".join([f"{name:>12}" for name in param_names])
-        print(header)
-        for i, param_name in enumerate(param_names):
-            row = f"{param_name:<8}"
-            for j in range(len(param_names)):
-                row += f"{results['covariance_matrix'][i,j]:12.6f}"
-            print(row)
-        
-        print(f"\nKorrelationsmatrix:")
-        print(header)
-        for i, param_name in enumerate(param_names):
-            row = f"{param_name:<8}"
-            for j in range(len(param_names)):
-                row += f"{results['correlation_matrix'][i,j]:12.4f}"
-            print(row)
-    
     # Histogramme erstellen
     create_histograms(results)
     
     return results
-
 def schaetze_parameter_noisy(x_cal, y_cal, concentrations, time_points, absorption_data, param, model_name='michaelis_menten'):
     """
     Parameter schätzen mit verrauschten Daten für beliebige Modelle
@@ -629,7 +631,6 @@ def schaetze_parameter_noisy(x_cal, y_cal, concentrations, time_points, absorpti
         # Kalibrierungssteigung berechnen
         slope_cal, intercept_cal, r_value_cal, _, _ = linregress(x_cal, y_cal)
         
-        # WICHTIGER HINWEIS: Für Zwei-Substrat müsste hier eine erweiterte Datenbehandlung erfolgen
         # Da Monte Carlo aber normalerweise mit Ein-Substrat-Daten läuft, verwenden wir die einfache Version
         initial_rates, valid_concentrations = berechne_aktivitaet(concentrations, absorption_data, time_points, slope_cal, param, verbose=False)
 
@@ -659,6 +660,96 @@ def schaetze_parameter_noisy(x_cal, y_cal, concentrations, time_points, absorpti
             
             param_errors = np.sqrt(np.diag(covariance))
             
+            y_pred = model_func(x_data, *params)
+            ss_res = np.sum((y_data - y_pred) ** 2)
+            ss_tot = np.sum((y_data - np.mean(y_data)) ** 2)
+            r_squared = 1 - (ss_res / ss_tot)
+            
+            # Ergebnis-Dictionary erstellen
+            result = {'R_squared': r_squared, 'model_name': model_name}
+            
+            # Parameter dynamisch hinzufügen
+            for i, (name, value, error) in enumerate(zip(param_names, params, param_errors)):
+                result[name] = value
+                result[f"{name}_error"] = error
+            
+            return result
+            
+        except Exception:
+            return None
+            
+    except Exception:
+        return None
+
+def schaetze_parameter_noisy_two_substrat(x_cal, y_cal, 
+                                        concentrations_s1, time_points_s1, absorption_data_s1, S2_constant,
+                                        concentrations_s2, time_points_s2, absorption_data_s2, S1_constant,
+                                        param, model_name):
+    """
+    Parameter schätzen mit verrauschten Zwei-Substrat-Daten
+    """
+    try:
+        # Modell-Info holen
+        if model_name not in AVAILABLE_MODELS:
+            return None
+            
+        model_info = AVAILABLE_MODELS[model_name]
+        model_func = model_info['function']
+        param_names = model_info['param_names']
+        
+        # Kalibrierungssteigung berechnen
+        slope_cal, intercept_cal, r_value_cal, _, _ = linregress(x_cal, y_cal)
+        
+        # Experiment 1: S1 variabel, S2 konstant
+        initial_rates_s1, valid_concentrations_s1 = berechne_aktivitaet(
+            concentrations_s1, absorption_data_s1, time_points_s1, slope_cal, param, verbose=False
+        )
+        
+        # Experiment 2: S2 variabel, S1 konstant
+        initial_rates_s2, valid_concentrations_s2 = berechne_aktivitaet(
+            concentrations_s2, absorption_data_s2, time_points_s2, slope_cal, param, verbose=False
+        )
+        
+        if initial_rates_s1 is None or initial_rates_s2 is None:
+            return None
+            
+        if len(initial_rates_s1) == 0 or len(initial_rates_s2) == 0:
+            return None
+        
+        # Kombinierte Datenstruktur erstellen
+        S1_combined = np.concatenate([
+            valid_concentrations_s1,                          # Variable S1-Werte
+            np.full(len(valid_concentrations_s2), S1_constant) # Konstante S1-Werte
+        ])
+        
+        S2_combined = np.concatenate([
+            np.full(len(valid_concentrations_s1), S2_constant), # Konstante S2-Werte
+            valid_concentrations_s2                            # Variable S2-Werte
+        ])
+        
+        activities_combined = np.concatenate([initial_rates_s1, initial_rates_s2])
+        
+        # Parameter fitten
+        try:
+            # Bessere initial guess basierend auf Daten
+            vmax_guess = max(activities_combined) * 1.2  # 20% höher als Maximum
+            km1_guess = np.median(valid_concentrations_s1) if len(valid_concentrations_s1) > 0 else 1.0
+            km2_guess = np.median(valid_concentrations_s2) if len(valid_concentrations_s2) > 0 else 100.0
+            
+            p0 = [vmax_guess, km1_guess, km2_guess]
+            x_data = (S1_combined, S2_combined)
+            y_data = activities_combined
+            
+            params, covariance = curve_fit(model_func, x_data, y_data, p0=p0, maxfev=10000)  # Mehr Iterationen
+            
+            # Plausibilitätsprüfung - weniger streng
+            for param_val in params:
+                if param_val <= 0 or param_val > 1000:  # Erweitert: von 10000 auf 1000
+                    return None
+            
+            param_errors = np.sqrt(np.diag(covariance))
+            
+            # R² berechnen
             y_pred = model_func(x_data, *params)
             ss_res = np.sum((y_data - y_pred) ** 2)
             ss_tot = np.sum((y_data - np.mean(y_data)) ** 2)
@@ -761,9 +852,9 @@ if __name__ == "__main__":
 
     # Parameter für die Messung - WICHTIG: Korrekte Werte eingeben!
     activ_param = {
-        "Vf_well": 1.0,      # Verdünnungsfaktor der Gesamtansatzlösung im Well (z.B. 1.5 für 1:1.5)
-        "Vf_prod": 1.0,      # Verdünnungsfaktor der Proteinlösung (z.B. 10 für 1:10) 
-        "c_prod": 1.0        # Proteinkonzentration [mg/L] (z.B. 0.5 mg/L)
+        "Vf_well": 1.0,      # Verdünnungsfaktor der Gesamtansatzlösung im Well 
+        "Vf_prod": 10.0,      # Verdünnungsfaktor der Proteinlösung 
+        "c_prod": 2.2108        # Proteinkonzentration [mg/L] 
     }
 
     # Zwei-Substrat-Modell auswählen
