@@ -1,29 +1,33 @@
 from parameter_schaetzen_noise import *
- # Parameter für die Messung - WICHTIG: Korrekte Werte eingeben!
+
+# Parameter für die Messung - WICHTIG: Korrekte Werte eingeben!
 activ_param = {
     "Vf_well": 1.0,      # Verdünnungsfaktor der Gesamtansatzlösung im Well 
     "Vf_prod": 10.0,      # Verdünnungsfaktor der Proteinlösung 
     "c_prod": 2.2108        # Proteinkonzentration [mg/L] 
 }
 
-# Zwei-Substrat-Modell auswählen
-model_name = 'two_substrat_michaelis_menten'
+# Zwei-Substrat mit einer Inhibition Modell auswählen
+model_name = 'two_substrat_michaelis_menten_with_one_inhibition'
 
 print("=" * 80)
-print("=== ZWEI-SUBSTRAT MICHAELIS-MENTEN PARAMETERSCHÄTZUNG ===")
-print("=" * 80)
-print("INFO: Lädt Daten aus r1_nad_pd_mod.csv")
-print("INFO: Ein-Substrat-Variation (zweites Substrat konstant)")
+print("=== ZWEI-SUBSTRAT MICHAELIS-MENTEN MIT EINER INHIBITION ===")
 print("=" * 80)
 
+print(f"\n=== VERFÜGBARE MODELLE ===")
+for name, info in AVAILABLE_MODELS.items():
+    params_str = ", ".join([f"{p} [{u}]" for p, u in zip(info['param_names'], info['param_units'])])
+    print(f"- {name}: {info['description']} (Parameter: {params_str})")
 
 print(f"\n=== ORIGINALDATEN ANALYSE ===")
 print(f"Verwendetes Modell: {model_name}")
 print(f"Beschreibung: {AVAILABLE_MODELS[model_name]['description']}")
 print(f"Parameter: {', '.join(AVAILABLE_MODELS[model_name]['param_names'])}")
 print(f"Einheiten: {', '.join(AVAILABLE_MODELS[model_name]['param_units'])}")
+print("\nModell-Gleichung: v = (Vmax * S1 * S2) / ((Km1 + S1) * (Km2 + S2) * (1 + S2/Ki))")
+print("Inhibition: Kompetitive Inhibition durch S2")
 
-print("\nStarte Parameterschätzung für Zwei-Substrat-Modell...")
+print("\nStarte Parameterschätzung für Zwei-Substrat-Modell mit einer Inhibition...")
 result_original = schaetze_parameter(activ_param, model_name)
 
 if result_original:
@@ -39,36 +43,48 @@ if result_original:
     
     print(f"Original R²: {result_original['R_squared']:.4f}")
     
-    # Zusätzliche Zwei-Substrat-spezifische Informationen  
-    if 'S2_constant' in result_original:
-        print(f"\nExperimentelle Bedingungen (CSV Ein-Substrat-Variation):")
-        print(f"- Substrat 1 (variabel): Konzentrationen aus CSV")
-        print(f"- Substrat 2 (konstant): {result_original['S2_constant']:.2f} mM")
+    # Zusätzliche Zwei-Substrat-spezifische Informationen
+    if 'S1_constant' in result_original and 'S2_constant' in result_original:
+        print(f"\nExperimentelle Bedingungen:")
+        print(f"- S1 konstant (Exp. 2): {result_original['S1_constant']:.2f} mM")
+        print(f"- S2 konstant (Exp. 1): {result_original['S2_constant']:.2f} mM")
     
     print(f"Modellbeschreibung: {result_original['model_description']}")
+    
+    # Spezielle Interpretation für Inhibitionsmodell
+    if 'Ki' in result_original:
+        ki_value = result_original['Ki']
+        s2_constant = result_original.get('S2_constant', 500.0)
+        inhibition_factor = s2_constant / (ki_value + s2_constant)
+        print(f"\nInhibitionsanalyse:")
+        print(f"- Inhibitionskonstante Ki: {ki_value:.4f} mM")
+        print(f"- Bei S2 = {s2_constant:.0f} mM: Inhibitionsfaktor = {inhibition_factor:.3f}")
+        print(f"- Relative Aktivität: {inhibition_factor*100:.1f}% der maximal möglichen")
     
 else:
     print("FEHLER: Parameterschätzung fehlgeschlagen!")
     print("Bitte überprüfen Sie:")
-    print("- Verfügbarkeit der CSV-Datei: r1_nad_pd_mod.csv")
-    print("- NADH-Kalibrierungsdatei: NADH_Kalibriergerade.xlsx")
+    print("- Verfügbarkeit der Datendateien")
     print("- Korrektheit der Pfade")
-    print("- CSV-Format und Datenstruktur")
+    print("- Format der Excel-Dateien")
+    print("- Ob genügend Datenpunkte für 4 Parameter vorhanden sind")
     exit(1)
 
 print("\n" + "=" * 80)
 print("=== MONTE CARLO SIMULATION ===")
 print("=" * 80)
 
-# Monte Carlo Simulation für Zwei-Substrat-Modell
-print("Starte Monte Carlo Simulation für Zwei-Substrat-Modell...")
+# Monte Carlo Simulation für Inhibitionsmodell
+print("Starte Monte Carlo Simulation für Zwei-Substrat-Modell mit einer Inhibition...")
+print("Hinweis: Dies kann mehrere Minuten dauern!")
+print("INFO: Inhibitionsmodelle benötigen oft mehr Iterationen für stabile Ergebnisse.")
 
 mc_results = monte_carlo_simulation(
     activ_param,
     model_name,
-    n_iterations=1000,              # Sehr wenige Iterationen für Debugging
-    noise_level_calibration=0.005, # Sehr wenig Rauschen: 0.5%
-    noise_level_kinetics=0.005     # Sehr wenig Rauschen: 0.5%
+    n_iterations=7500,             # Mehr Iterationen für komplexeres Modell
+    noise_level_calibration=0.02,  # 2% Rauschen in Kalibrierung
+    noise_level_kinetics=0.025     # 2.5% Rauschen in Kinetikdaten (etwas weniger als Standard)
 )
 
 if mc_results and result_original:
@@ -117,6 +133,16 @@ if mc_results and result_original:
             print(f"  Variationskoeffizient: {cv:.2f}%")
             print(f"  95% Konfidenzintervall: [{ci_lower:.4f}, {ci_upper:.4f}]")
             
+            # Spezielle Interpretation für Ki
+            if param_name == 'Ki':
+                print(f"  Inhibitionsstärke: ", end="")
+                if mc_mean < 10:
+                    print("Starke Inhibition")
+                elif mc_mean < 100:
+                    print("Moderate Inhibition")
+                else:
+                    print("Schwache Inhibition")
+            
             # Bewertung der Unsicherheit
             if cv < 5:
                 print(f"  → Sehr präzise Schätzung")
@@ -128,8 +154,8 @@ if mc_results and result_original:
                 print(f"  → Hohe Unsicherheit")
             print()
     
-    # Korrelationsanalyse für Zwei-Substrat-Modell (3 Parameter)
-    if len(model_info['param_names']) >= 2 and 'correlation_matrix' in mc_results:
+    # Korrelationsanalyse für 4-Parameter-Modell
+    if 'correlation_matrix' in mc_results:
         print("=" * 60)
         print("=== PARAMETER-KORRELATIONSANALYSE ===")
         print("=" * 60)
@@ -160,37 +186,71 @@ if mc_results and result_original:
                 if abs(corr) > 0.8:
                     print("  → Sehr starke Korrelation!")
                 elif abs(corr) > 0.6:
-                    print("  → Starke Korrelation ")
+                    print("  → Starke Korrelation")
                 elif abs(corr) > 0.3:
                     print("  → Moderate Korrelation")
                 else:
-                    print("  → Schwache Korrelation ")
+                    print("  → Schwache Korrelation")
+        
+        # Spezielle Warnung für Ki-Korrelationen
+        ki_idx = param_names.index('Ki') if 'Ki' in param_names else -1
+        if ki_idx >= 0:
+            print(f"\nINFO: Inhibitionsparameter Ki:")
+            for j, param in enumerate(param_names):
+                if j != ki_idx:
+                    corr = correlation_matrix[ki_idx, j]
+                    if abs(corr) > 0.7:
+                        print(f"  WARNUNG: Starke Korrelation Ki-{param} ({corr:.3f})")
+                        print(f"           Dies kann die Parameterschätzung erschweren!")
     
     print("\n" + "=" * 60)
     print("=== SIMULATIONSSTATISTIK ===")
     print("=" * 60)
     print(f"Erfolgreiche Iterationen: {mc_results['n_successful']}/{mc_results.get('n_total', 'N/A')}")
-    print(f"Erfolgsrate: {(mc_results['n_successful']/mc_results.get('n_total', mc_results['n_successful']))*100:.1f}%")
+    
+    total_iterations = mc_results.get('n_total', mc_results['n_successful'])
+    success_rate = (mc_results['n_successful']/total_iterations)*100
+    print(f"Erfolgsrate: {success_rate:.1f}%")
     
     if mc_results['n_successful'] < 1000:
         print("  WARNUNG: Wenige erfolgreiche Iterationen!")
-        print("   Erhöhen Sie ggf. die Anzahl der Iterationen oder reduzieren Sie das Rauschen.")
+        print("   Inhibitionsmodelle sind sensitiver - versuchen Sie:")
+        print("   - Mehr Iterationen (n_iterations=10000)")
+        print("   - Weniger Rauschen (noise_level_kinetics=0.02)")
+    
+    if success_rate < 30:
+        print("  WARNUNG: Niedrige Erfolgsrate!")
+        print("   Das deutet auf Fitting-Probleme hin:")
+        print("   - Überprüfen Sie die Datenqualität")
+        print("   - Ki-Parameter schwer zu schätzen?")
     
     print(f"\nHistogramme werden erstellt und gespeichert...")
     print(f"Dateiname: monte_carlo_results_{model_name}.png")
 
 else:
-    print(" FEHLER: Monte Carlo Simulation oder Original-Analyse fehlgeschlagen!")
-    print("\nMögliche Ursachen:")
+    print("FEHLER: Monte Carlo Simulation oder Original-Analyse fehlgeschlagen!")
+    print("\nMögliche Ursachen bei Inhibitionsmodellen:")
+    print("- Ki-Parameter schwer zu bestimmen (braucht gute S2-Variation)")
+    print("- Starke Parameter-Korrelationen")
     print("- Zu viel Rauschen in den Daten")
-    print("- Probleme beim Laden der Excel-Dateien")
-    print("- Ungeeignete Initial-Parameter für das Fitting")
-    print("- Zu wenige gültige Datenpunkte")
+    print("- Ungeeignete experimentelle Bedingungen für Inhibitionsnachweis")
     
     print("\nLösungsvorschläge:")
-    print("- Reduzieren Sie noise_level_calibration und noise_level_kinetics")
-    print("- Überprüfen Sie die Datenpfade und Excel-Dateien")
-    print("- Versuchen Sie weniger Iterationen (n_iterations=1000)")
+    print("- Reduzieren Sie das Rauschen (noise_level_kinetics=0.015)")
+    print("- Erhöhen Sie die Iterationen (n_iterations=10000)")
+    print("- Überprüfen Sie, ob S2-Konzentrationen im Ki-Bereich liegen")
+    print("- Verwenden Sie das einfachere 'two_substrat_michaelis_menten' Modell")
+
+print("\n" + "=" * 80)
+print("=== INHIBITIONSMODELL - ZUSÄTZLICHE INFORMATIONEN ===")
+print("=" * 80)
+print("Dieses Modell beschreibt kompetitive Inhibition durch das zweite Substrat (S2).")
+print("Die Inhibition tritt auf, wenn S2 in hohen Konzentrationen vorliegt.")
+print("\nTipps für bessere Ergebnisse:")
+print("- Stellen Sie sicher, dass Ihre S2-Konzentrationen einen weiten Bereich abdecken")
+print("- Niedrige S2-Konzentrationen zeigen maximale Aktivität")
+print("- Hohe S2-Konzentrationen zeigen Inhibitionseffekte")
+print("- Ki sollte im Bereich Ihrer S2-Konzentrationen liegen")
 
 print("\n" + "=" * 80)
 print("=== PROGRAMMENDE ===")
