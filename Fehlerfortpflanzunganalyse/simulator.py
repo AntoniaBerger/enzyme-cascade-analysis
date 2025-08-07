@@ -1,3 +1,4 @@
-# todos
-#1. write down the models 
-#2. 
+# availible simulator options:
+    # - forward simulation with cadet
+    # - forward simulation with scipy
+
