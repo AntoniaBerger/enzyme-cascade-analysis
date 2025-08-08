@@ -13,92 +13,113 @@ def is_linear(x, y, threshold=0.80):
     except Exception:
         return False
 
-def add_noise(data, noise_level=0.1):
-    """
-    Fügt den Daten zufälliges Rauschen hinzu.
-    """
+def add_noise_calibration(data, noise_level=0.1):
+    noisy_data = data.copy()
     noise = np.random.normal(0, noise_level, size=data.shape)
-    return data + noise
+    return noisy_data + noise
 
-def combine_full_reaction_system_data(
-    r1_nad_valid_conc, r1_nad_rates, r1_pd_valid_conc, r1_pd_rates,
-    r2_pd_valid_conc, r2_pd_rates, r2_nadh_valid_conc, r2_nadh_rates,
-    r2_hp_valid_conc, r2_hp_rates, r3_nad_valid_conc, r3_nad_rates,
-    r3_lactol_valid_conc, r3_lactol_rates
-):
-    r1_nad_constant = 500   # mM (PD konstant bei NAD-Variation)
-    r1_pd_constant = 5.0    # mM (NAD konstant bei PD-Variation)
-    r2_nadh_constant = 0.6   # mM (aus "0.6 mM NADH" Dateiname)
-    r2_lactol_constant = 300.0  # mM (aus "300 mM HP" Dateiname)
-    r3_nad_constant = 5.0     # mM (aus "5 mM NAD" Dateiname)
-    r3_lactol_constant = 500.0  # mM (aus "500 mM Lactol" Dateiname)
+def add_noise_reaction(data, noise_level=0.1, verbose=False):
+    """
+    Fügt Rauschen zu Reaktions-CSV-Daten hinzu.
+    Speziell für die Struktur: Header, Units, Well-Daten mit Konzentrationen und Absorptionswerten
+    
+    Args:
+        data: pandas DataFrame (CSV-Reaktionsdaten)
+        noise_level: Relative Rauschstärke (0.1 = 10%)
+        verbose: Bool - Debug-Ausgaben
+        
+    Returns:
+        pandas DataFrame mit verrauschten Daten
+    """
+    noisy_data = data.copy()
+    
+    try:
+        # Struktur der Reaktions-CSV:
+        # Zeile 0: ["Time [s]", "Concentration", "0", "30", "60", ...]  
+        # Zeile 1: ["", "mM", "0", "30", "60", ...]
+        # Ab Zeile 2: ["Well X", concentration_value, abs_0, abs_30, abs_60, ...]
+        
+        if verbose:
+            print(f"Original DataFrame shape: {data.shape}")
+            print(f"Erste 3 Zeilen:\n{data.iloc[:3, :5]}")
+        
+        # 1. Verrausche Absorptionsdaten (ab Spalte 2, ab Zeile 2)
+        absorption_start_row = 2
+        absorption_start_col = 2
+        
+        if data.shape[0] > absorption_start_row and data.shape[1] > absorption_start_col:
+            absorption_region = data.iloc[absorption_start_row:, absorption_start_col:]
+            
+            for row_idx in range(absorption_region.shape[0]):
+                for col_idx in range(absorption_region.shape[1]):
+                    cell_value = absorption_region.iloc[row_idx, col_idx]
+                    
+                    # Versuche numerische Konvertierung
+                    try:
+                        numeric_value = float(cell_value)
+                        if not np.isnan(numeric_value):
+                            # Addiere relatives Rauschen
+                            noise = np.random.normal(0, abs(numeric_value) * noise_level)
+                            noisy_value = numeric_value + noise
+                            
+                            # Setze zurück ins DataFrame
+                            actual_row = absorption_start_row + row_idx
+                            actual_col = absorption_start_col + col_idx
+                            noisy_data.iloc[actual_row, actual_col] = noisy_value
+                            
+                    except (ValueError, TypeError):
+                        # Nicht-numerische Werte ignorieren
+                        continue
+        
+        # 2. Optional: Auch Konzentrationen verrauschen (Spalte 1, ab Zeile 2)  
+        if data.shape[0] > absorption_start_row:
+            conc_column = data.iloc[absorption_start_row:, 1]  # Spalte 1
+            
+            for row_idx, conc_value in enumerate(conc_column):
+                try:
+                    numeric_conc = float(conc_value)
+                    if not np.isnan(numeric_conc) and numeric_conc > 0:
+                        # Weniger Rauschen für Konzentrationen (meist bekannte Werte)
+                        conc_noise = np.random.normal(0, numeric_conc * noise_level * 0.1)
+                        noisy_conc = max(0, numeric_conc + conc_noise)  # Keine negativen Konzentrationen
+                        
+                        actual_row = absorption_start_row + row_idx
+                        noisy_data.iloc[actual_row, 1] = noisy_conc
+                        
+                except (ValueError, TypeError):
+                    continue
+        
+        if verbose:
+            print(f"Rauschen hinzugefügt mit Level: {noise_level}")
+            
+    except Exception as e:
+        print(f"Fehler beim Hinzufügen von Rauschen: {e}")
+        return data  # Original bei Fehler zurückgeben
+        
+    return noisy_data
 
-    all_s1_values = []
-    all_s2_values = []
-    all_inhibitor_values = []
-    all_activities = []
-    all_reaction_ids = []
+# Füge auch zu data_hadler.py hinzu
+def add_noise_reaction_dict(reaction_data_dict, noise_level=0.1, verbose=False):
+    """
+    Fügt Rauschen zu einem Dictionary von Reaktionsdaten hinzu.
+    
+    Args:
+        reaction_data_dict: Dict mit {reaction_name: DataFrame}
+        noise_level: Rauschstärke
+        verbose: Debug-Ausgaben
+        
+    Returns:
+        Dict mit verrauschten DataFrames
+    """
+    noisy_dict = {}
+    
+    for reaction_name, dataframe in reaction_data_dict.items():
+        if verbose:
+            print(f"Verrausche Reaktion: {reaction_name}")
+        noisy_dict[reaction_name] = add_noise_reaction(dataframe, noise_level, verbose=False)
+        
+    return noisy_dict
 
-    # Reaktion 1 Daten hinzufügen
-    all_s1_values.extend(r1_nad_valid_conc)
-    all_s2_values.extend([r1_nad_constant] * len(r1_nad_valid_conc))
-    all_inhibitor_values.extend([0.0] * len(r1_nad_valid_conc))
-    all_activities.extend(r1_nad_rates)
-    all_reaction_ids.extend([1] * len(r1_nad_valid_conc))
-
-    all_s1_values.extend([r1_pd_constant] * len(r1_pd_valid_conc))
-    all_s2_values.extend(r1_pd_valid_conc)
-    all_inhibitor_values.extend([0.0] * len(r1_pd_valid_conc))
-    all_activities.extend(r1_pd_rates)
-    all_reaction_ids.extend([1] * len(r1_pd_valid_conc))
-
-    # Reaktion 2 Daten hinzufügen
-    all_s1_values.extend([r2_lactol_constant] * len(r2_pd_valid_conc))
-    all_s2_values.extend([r2_nadh_constant] * len(r2_pd_valid_conc))
-    all_inhibitor_values.extend(r2_pd_valid_conc)
-    all_activities.extend(r2_pd_rates)
-    all_reaction_ids.extend([2] * len(r2_pd_valid_conc))
-
-    all_s1_values.extend([r2_lactol_constant] * len(r2_nadh_valid_conc))
-    all_s2_values.extend(r2_nadh_valid_conc)
-    all_inhibitor_values.extend([1.0] * len(r2_nadh_valid_conc))
-    all_activities.extend(r2_nadh_rates)
-    all_reaction_ids.extend([2] * len(r2_nadh_valid_conc))
-
-    all_s1_values.extend(r2_hp_valid_conc)
-    all_s2_values.extend([r2_nadh_constant] * len(r2_hp_valid_conc))
-    all_inhibitor_values.extend([1.0] * len(r2_hp_valid_conc))
-    all_activities.extend(r2_hp_rates)
-    all_reaction_ids.extend([2] * len(r2_hp_valid_conc))
-
-    # Reaktion 3 Daten hinzufügen
-    all_s1_values.extend([r3_lactol_constant] * len(r3_nad_valid_conc))
-    all_s2_values.extend(r3_nad_valid_conc)
-    all_inhibitor_values.extend([0.0] * len(r3_nad_valid_conc))
-    all_activities.extend(r3_nad_rates)
-    all_reaction_ids.extend([3] * len(r3_nad_valid_conc))
-
-    all_s1_values.extend(r3_lactol_valid_conc)
-    all_s2_values.extend([r3_nad_constant] * len(r3_lactol_valid_conc))
-    all_inhibitor_values.extend([0.0] * len(r3_lactol_valid_conc))
-    all_activities.extend(r3_lactol_rates)
-    all_reaction_ids.extend([3] * len(r3_lactol_valid_conc))
-
-    S1_combined = np.array(all_s1_values)
-    S2_combined = np.array(all_s2_values)
-    Inhibitor_combined = np.array(all_inhibitor_values)
-    activities_combined = np.array(all_activities)
-    reaction_ids = np.array(all_reaction_ids)
-
-    # Rückgabe als experiment_data-Dict für maximale Kompatibilität
-    experiment_data = {
-        "S1": S1_combined,
-        "S2": S2_combined,
-        "Inhibitor": Inhibitor_combined,
-        "activities": activities_combined,
-        "reaction_ids": reaction_ids
-    }
-    return experiment_data
 
 def get_concentrations_from_csv(csv_data):
     """Extrahiert die Konzentrationen aus CSV-Kinetikdaten"""
@@ -146,7 +167,7 @@ def get_time_points(csv_data):
     
     return np.array(time_points)
 
-def calculate_calibration(data):
+def calculate_calibration(data, verbose=False):
     """
     Berechnet die Kalibrierung basierend auf NADH-Konzentrationen und Extinktionen.
     Unterstützt sowohl pandas DataFrames als auch experiment_data-Dicts.
@@ -165,11 +186,13 @@ def calculate_calibration(data):
     y = np.mean(np.array([y1, y2]), axis=0) if isinstance(data, pd.DataFrame) else y
     
     if not is_linear(x, y):
-        print("Die Daten sind nicht linear. Bitte überprüfen Sie die Kalibrierung.")
+        if verbose:
+            print("Die Daten sind nicht linear. Bitte überprüfen Sie die Kalibrierung.")
         return None
 
     slope_cal, intercept_cal, r_value_cal, _, _ = linregress(x, y)
-    print(f"Kalibrierung: Steigung = {slope_cal:.2f}, R² = {r_value_cal**2:.4f}")
+    if verbose:
+        print(f"Kalibrierung: Steigung = {slope_cal:.2f}, R² = {r_value_cal**2:.4f}")
     
     return slope_cal
 
@@ -281,21 +304,109 @@ def calculate_activity(concentrations, absorption_data, time_points, slope_cal, 
 
     return  initial_rates , valid_concentrations
 
-def get_rates_and_concentrations(reaction_data, slope, activity_params):
-
-    #todo next erlaube dictionary als reaction_data
- 
-
-    concentrations = get_concentrations_from_csv(reaction_data)
-    absorption_data = get_absorption_data(reaction_data)
-    time_points = get_time_points(reaction_data)
+def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict, verbose=True):
 
 
-    activities, concentrations = calculate_activity(concentrations, absorption_data, time_points, slope, activity_params)
+    processed_data = pd.DataFrame()
+   # Dataframe structure
+   # | reaction | s_1 | s_2 | ... | s_n | rates |
 
-    return  [activities, concentrations]
+    substrate_columns = [f"s_{i+1}" for i in range(reaction_params_dict["x_dimension"])]
+    columns = ["reaction"] + substrate_columns + ["rates"]
+    processed_data = pd.DataFrame(columns=columns)
 
-def make_fitting_data(model_info, concentrations, rates):
+    for reaction_name, reaction_data in reaction_data_dict.items():
+        if verbose:
+            print(f"Verarbeite Reaktion: {reaction_name}")
+        
+        try:
+            # Hole die entsprechenden Aktivitätsparameter
+            if reaction_name in reaction_params_dict:
+                activity_params = reaction_params_dict[reaction_name]
+            else:
+                if verbose:
+                    print(f"Warning: Keine Aktivitätsparameter für {reaction_name} gefunden")
+                processed_data = None
+                continue
+            # todo handle results per reaction
+            reaction_result = []
+            for (substrate_name, substrate_data) in substrate_data.items():
+                # Extrahiere Daten aus CSV
+                concentrations = get_concentrations_from_csv(reaction_data)
+                absorption_data = get_absorption_data(reaction_data)
+                time_points = get_time_points(reaction_data)
+
+            # Berechne Aktivitäten (OHNE Well-Informationen wenn verbose=False)
+            result = calculate_activity(
+                concentrations, absorption_data, time_points, 
+                slope, activity_params, verbose=verbose
+            )
+            
+            if result is not None:
+                activities, valid_concentrations = result                
+                
+                processed_data["reaction"] = [reaction_name] * len(activities)
+                processed_data["rates"] = activities
+
+
+                if verbose:
+                    print(f"✓ {reaction_name}: {len(activities)} gültige Datenpunkte")
+            else:
+                if verbose:
+                    print(f" {reaction_name}: Keine gültigen Daten")
+                processed_data = None
+
+        except Exception as e:
+            if verbose:
+                print(f" Fehler bei {reaction_name}: {e}")
+            processed_data = None
+
+    return processed_data
+
+def create_reaction_rates_dict(processed_data):
+    """
+    Erstellt ein rates_dict aus verarbeiteten Reaktionsdaten.
+    
+    Args:
+        processed_data: Rückgabe von get_rates_and_concentrations
+        
+    Returns:
+        Dict: {reaction_name + "_rates": activities}
+    """
+    rates_dict = {}
+    activities = processed_data.get("activities", {})
+    
+    for reaction_name, activity_data in activities.items():
+        rates_dict[f"{reaction_name}_rates"] = activity_data
+    
+    return rates_dict
+
+def create_concentrations_dict(processed_data, constants_dict=None):
+    """
+    Erstellt ein concentrations_dict aus verarbeiteten Reaktionsdaten.
+    
+    Args:
+        processed_data: Rückgabe von get_rates_and_concentrations
+        constants_dict: Dict mit konstanten Konzentrationen {key: value}
+        
+    Returns:
+        Dict: {reaction_name + "_conc": concentrations, ...constants}
+    """
+    concentrations_dict = {}
+    concentrations = processed_data.get("concentrations", {})
+    
+    # Füge variable Konzentrationen hinzu
+    for reaction_name, conc_data in concentrations.items():
+        concentrations_dict[f"{reaction_name}_conc"] = conc_data
+    
+    # Füge konstante Konzentrationen hinzu
+    if constants_dict:
+        concentrations_dict.update(constants_dict)
+    
+    return concentrations_dict
+
+
+def make_fitting_data(model_info, data_info, concentrations, rates, verbose=True):
     """
     Erstellt die Datenstruktur für das Fitting basierend auf Modell-Informationen.
     Automatische Behandlung von variablen und konstanten Substratkonzentrationen.
@@ -303,21 +414,20 @@ def make_fitting_data(model_info, concentrations, rates):
     model_info: Dict mit Modell-Informationen (z.B. name, function, param_names, etc.)
     concentrations: Dict mit Substratkonzentrationen
     rates: Dict mit gemessenen Raten
+    verbose: Bool - ob Debug-Ausgaben gezeigt werden sollen
     """
     
     # Extrahiere und kombiniere alle Aktivitäten
     activities_list = [rates[key] for key in rates if key.endswith('_rates') and rates[key] is not None]
     activities = np.concatenate(activities_list) if activities_list else np.array([])
     
-    print(f"Debug - Total activities: {len(activities)}")
-    
     # Allgemeine Behandlung für Multi-Substrat-Modelle
     substrate_keys = model_info['substrate_keys']
     n_substrates = len(substrate_keys)
-    
+
+    constants = data_info["constants"]
+
     if n_substrates > 1:
-        print(f"Debug - Multi-Substrat-Modell mit {n_substrates} Substraten")
-        
         # Sammle alle variablen Konzentrationen und deren konstante Partner
         variable_data = []
         constant_values = []
@@ -329,20 +439,16 @@ def make_fitting_data(model_info, concentrations, rates):
             else:
                 const_key = f"{substrate_key}_const"
             
-            print(f"Debug - Suche nach: var='{var_conc_key}', const='{const_key}'")
-            
             if var_conc_key in concentrations:
                 variable_data.append((substrate_key, concentrations[var_conc_key]))
                 
                 # Suche nach entsprechendem konstanten Wert
-                if const_key in concentrations:
-                    constant_values.append((substrate_key, concentrations[const_key]))
+                if const_key in constants:
+                    constant_values.append((substrate_key, constants[const_key]))
                 else:
-                    print(f"Warning: Konstanter Wert für {substrate_key} nicht gefunden ({const_key})")
+                    if verbose:
+                        print(f"Warning: Konstanter Wert für {substrate_key} nicht gefunden ({const_key})")
                     constant_values.append((substrate_key, 1.0))  # Default-Wert
-        
-        print(f"Debug - Variable Daten: {len(variable_data)}")
-        print(f"Debug - Konstante Werte: {len(constant_values)}")
         
         # Erstelle kombinierte Substrat-Arrays
         substrate_arrays = [[] for _ in range(n_substrates)]
@@ -351,8 +457,6 @@ def make_fitting_data(model_info, concentrations, rates):
         for var_idx, (var_substrate, var_concentrations) in enumerate(variable_data):
             var_concentrations = np.array(var_concentrations)
             n_var_points = len(var_concentrations)
-            
-            print(f"Debug - {var_substrate} variiert: {n_var_points} Punkte")
             
             # Für jedes Substrat: füge entweder variable oder konstante Werte hinzu
             for substrate_idx, substrate_key in enumerate(substrate_keys):
@@ -366,11 +470,6 @@ def make_fitting_data(model_info, concentrations, rates):
         
         # Konvertiere zu numpy arrays
         substrate_data = [np.array(arr) for arr in substrate_arrays]
-        
-        # Debug-Ausgabe
-        for i, (substrate_key, arr) in enumerate(zip(substrate_keys, substrate_data)):
-            print(f"Debug - {substrate_key}: shape {arr.shape}, first 5 values: {arr[:5]}")
-            print(f"Debug - {substrate_key}: unique values: {np.unique(arr)[:10]}")  # Zeige bis zu 10 einzigartige Werte
         
         return substrate_data, activities
     
@@ -395,12 +494,15 @@ def make_fitting_data(model_info, concentrations, rates):
                         if remainder > 0:
                             substrate_array = np.concatenate([substrate_array, substrate_array[:remainder]])
                     elif len(activities) < len(substrate_array):
-                        substrate_array = substrate_array[:len(activities)]
+                        substrate_array = substrate_array[:len(substrate_array)]
                 
                 substrate_data.append(substrate_array)
-                print(f"Debug - {substrate_key}: shape {substrate_array.shape}, first 3 values: {substrate_array[:3]}")
             else:
-                print(f"Warning: Key '{substrate_key}' not found in concentrations")
+                if verbose:
+                    print(f"Warning: Key '{substrate_key}' not found in concentrations")
                 substrate_data.append(np.zeros(len(activities)))
 
         return substrate_data, activities
+
+
+
