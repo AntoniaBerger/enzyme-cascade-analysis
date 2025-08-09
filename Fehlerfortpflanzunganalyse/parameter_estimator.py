@@ -155,41 +155,43 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
                 failed_counts["calibration"] += 1
                 continue
             
-            # 2. Verrausche Reaktionsdaten und verarbeite sie (OHNE Well-Informationen)
+            # 2. Verrausche Reaktionsdaten und verarbeite sie
             try:
-                active_params = data_info["active_params"]
+                # KORRIGIERT: Verwende data_info direkt (das ist schon reaction_params_dict!)
                 reaction_data_noisy = add_noise_reaction_dict(reaction_data, noise_level=noise_level["reaction"])
                 
                 processed_data_noisy = get_rates_and_concentrations(
-                    reaction_data_noisy, calibration_slope_noisy, active_params, verbose=False  # Keine Well-Ausgaben
+                    reaction_data_noisy, 
+                    calibration_slope_noisy, 
+                    data_info,  # NICHT data_info["active_params"]!
+                    verbose=False
                 )
 
-                if not processed_data_noisy or not processed_data_noisy.get("activities"):
+                # Prüfe ob DataFrame zurückgegeben wurde
+                if processed_data_noisy is None or len(processed_data_noisy) == 0:
                     failed_counts["data_processing"] += 1
                     continue
                     
-            except Exception:
+            except Exception as e:
+                print(f"Debug: Data processing error: {e}")  # Für Debug
                 failed_counts["data_processing"] += 1
                 continue
             
-            # 3. Erstelle Konzentrations- und Raten-Dictionaries
+            # 3. Parameter-Schätzung (DIREKT mit DataFrame!)
             try:
-                constants_dict = data_info["constants"] #todo add noise here
-                concentration_noisy = create_concentrations_dict(processed_data_noisy, constants_dict)
-                rates_noisy = create_reaction_rates_dict(processed_data_noisy)
-            except Exception:
-                failed_counts["data_processing"] += 1
-                continue
-            
-            # 4. Parameter-Schätzung (OHNE Debug-Ausgaben)
-            try:
-                result = estimate_parameters(model_info, data_info, concentration_noisy, rates_noisy, verbose=False)
+                result = estimate_parameters(
+                    model_info, 
+                    data_info, 
+                    processed_data_noisy,  # DataFrame direkt verwenden
+                    verbose=False
+                )
 
                 if not result or not result.get('success', False):
                     failed_counts["fitting"] += 1
                     continue
                     
-            except Exception:
+            except Exception as e:
+                print(f"Debug: Fitting error: {e}")  # Für Debug
                 failed_counts["fitting"] += 1
                 continue
             
@@ -199,10 +201,10 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
                 r_squared = result.get('r_squared', 0)
                 
                 # Plausibilitätsprüfung
-                if (len(params) >= 3 and 
+                if (len(params) >= len(model_info["param_names"]) and 
                     all(p > 0 for p in params) and  
                     params[0] < 100 and  
-                    all(1e-6 < p < 1000 for p in params[1:]) and  
+                    all(1e-6 < p < 10000 for p in params[1:]) and  
                     r_squared > 0.1):  
                     
                     successful_results.append(result)
@@ -355,22 +357,52 @@ def validate_parameters(params_dict, r_squared=None):
     
     return True
 
-def estimate_parameters(model_info, data_info, concentrations, rates, verbose=True): 
+def estimate_parameters(model_info, data_info, processed_data, verbose=False): 
     """
-    Schätzt die Parameter für ein gegebenes Modell basierend auf Konzentrationen und Raten.
-    
-    model_info: Dict mit Modell-Informationen (z.B. name, function, param_names, etc.)
-    data_info: Dict mit Daten-Informationen (z.B. constants, active_params)
-    concentrations: Dict mit Substratkonzentrationen
-    rates: Dict mit gemessenen Raten
-    verbose: Bool - ob Debug-Ausgaben gezeigt werden sollen
+    Schätzt die Parameter für ein gegebenes Modell basierend auf verarbeiteten Daten.
     """
     
-    substrate_data, activities = make_fitting_data(model_info, data_info, concentrations, rates, verbose=verbose)
+    if verbose:
+        print(f"DataFrame Info:")
+        print(f"Shape: {processed_data.shape}")
+        print(f"Columns: {list(processed_data.columns)}")
+        print(f"Erste 3 Zeilen:")
+        print(processed_data.head(3))
+    
+    try:
+        # Extrahiere Daten als separate Arrays (NICHT als Liste von Listen!)
+        reaction_ids = processed_data['reaction'].values
+        c1_values = processed_data['c1'].values if 'c1' in processed_data.columns else np.zeros(len(processed_data))
+        c2_values = processed_data['c2'].values if 'c2' in processed_data.columns else np.zeros(len(processed_data))
+        c3_values = processed_data['c3'].values if 'c3' in processed_data.columns else np.zeros(len(processed_data))
+        
+        # Activities als flaches Array
+        activities = processed_data['rates'].values
+        
+        if verbose:
+            print(f"Extrahierte Arrays:")
+            print(f"  reaction_ids: {reaction_ids[:3]}... (shape: {reaction_ids.shape})")
+            print(f"  c1_values: {c1_values[:3]}... (shape: {c1_values.shape})")  
+            print(f"  c2_values: {c2_values[:3]}... (shape: {c2_values.shape})")
+            print(f"  c3_values: {c3_values[:3]}... (shape: {c3_values.shape})")
+            print(f"  activities: {activities[:3]}... (shape: {activities.shape})")
+        
+        # Erstelle concentration_data für curve_fit (4 separate Arrays!)
+        # Achtung: Reihenfolge muss zu deiner full_reaction_system Funktion passen!
+        concentration_values = [c1_values, c2_values, c3_values, reaction_ids]  # S1, S2, Inhibitor, reaction_ids
+        
+        if verbose:
+            print(f"concentration_values shapes: {[arr.shape for arr in concentration_values]}")
+            print(f"activities shape: {activities.shape}")
+        
+    except Exception as e:
+        if verbose:
+            print(f"Fehler beim Extrahieren der Daten: {e}")
+        return {'success': False, 'error': f'Datenextraktion fehlgeschlagen: {e}'}
     
     # Fitting durchführen
-    result = fit_parameters(substrate_data, activities, model_info, verbose=verbose)
-
+    result = fit_parameters(concentration_values, activities, model_info, verbose=verbose)
+    
     return result
 
 if __name__ == "__main__":
@@ -389,26 +421,26 @@ if __name__ == "__main__":
     r2_path = os.path.join(BASE_PATH, 'Data', 'Reaction2')
     r2_hp_data = pd.read_csv(os.path.join(r2_path, 'r_2_HP_NADH_06mM.csv'), header=None)
     r2_nadh_data = pd.read_csv(os.path.join(r2_path, 'r_2_NADH_HP_300mM.csv'), header=None)
-    r2_pd_data = pd.read_csv(os.path.join(r2_path, 'r_2_PD_NADH_06nM_HP_300mM.csv'), header=None)
+    r2_pd_data = pd.read_csv(os.path.join(r2_path, 'r_2_PD_NADH_06mM_HP_300mM.csv'), header=None)
 
     r3_path = os.path.join(BASE_PATH, 'Data', 'Reaction3')
-    r3_lactol = pd.read_csv(os.path.join(r3_path, 'r_3_Lactol_NAD_5mM.csv'))
-    r3_nad = pd.read_csv(os.path.join(r3_path, 'r_3_NAD_Lactol_500mM.csv'))
+    r3_lactol = pd.read_csv(os.path.join(r3_path, 'r_3_Lactol_NAD_5mM.csv'), header=None)
+    r3_nad = pd.read_csv(os.path.join(r3_path, 'r_3_NAD_Lactol_500mM.csv'), header=None)
 
 
     full_system_data = {
         "r1": {
-            "r1_nad": r1_nad_data,
-            "r1_pd": r1_pd_data
+            "c1": r1_nad_data,
+            "c2": r1_pd_data
         },
         "r2": {
-            "r2_hp": r2_hp_data,
-            "r2_nadh": r2_nadh_data,
-            "r2_pd": r2_pd_data
+            "c1": r2_hp_data,
+            "c2": r2_nadh_data,
+            "c3": r2_pd_data
         },
         "r3": {
-            "r3_lactol": r3_lactol,
-            "r3_nad": r3_nad
+            "c1": r3_lactol,
+            "c2": r3_nad
         }
     }
 
@@ -418,48 +450,35 @@ if __name__ == "__main__":
             "Vf_well": 10.0,
             "Vf_prod": 1.0,
             "c_prod": 2.2108,
-            "c_nad_const": 5.0,
-            "c_pd_const": 500.0
+            "c1_const": 5.0,
+            "c2_const": 500.0
         },
         "r2": {
             "Vf_well": 10.0,
             "Vf_prod": 5.0,
             "c_prod": 2.15,
-            "c_hd_const": 6.0,
-            "c_nadh_const": 300.0,
-            "c_pd_const": 6.0
+            "c1_const": 6.0,
+            "c2_const": 300.0,
+            "c3_const": 6.0
         },
         "r3": {
             "Vf_well": 10.0,
             "Vf_prod": 10.0,
             "c_prod": 2.15,
-            "c_lactol_const": 5.0,
-            "c_nad_const": 500.0
+            "c1_const": 5.0,
+            "c2_const": 500.0
         },
         "x_dimension": 3,
         "y_dimension": 1
     }
 
-    full_system_constants_dict = {
-        "r1_nad_const": 5.0,    # NAD konstant wenn PD variiert
-        "r1_pd_const": 500.0,   # PD konstant wenn NAD variiert
-        "r2_hp_const": 6.0,     # HP konstant wenn NADH variiert
-        "r2_nadh_const": 300.0,   # NADH konstant wenn HP variiert
-        "r2_pd_const": 6.0,      # PD konstant wenn NADH variiert
-        "r3_lactol_const": 5.0,  # Lactol konstant wenn NAD variiert
-        "r3_nad_const": 500.0   # NAD konstant wenn Lactol variiert
-    }
-
-    processed_data = get_rates_and_concentrations(
+    df = get_rates_and_concentrations(
         full_system_data,
         calibration_slope,
         full_system_param
     )
 
-    # Fix: get_rates function needs 3 parameters, not 2
-    full_system_rates = create_reaction_rates_dict(processed_data)
-
-    full_system_concentrations = create_concentrations_dict(processed_data, full_system_constants_dict)
+    
 
     def full_reaction_system(concentration_data, Vmax1, Vmax2, Vmax3, KmPD, KmNAD, KmLactol, KmNADH, KiPD, KiNAD, KiLactol):
         """
@@ -542,15 +561,15 @@ if __name__ == "__main__":
         "description": "Komplettes Drei-Reaktions-System mit Inhibitionen"
     }
 
-    reac_1_parameters = estimate_parameters(full_reaction_system_model_info, full_system_param, full_system_concentrations, full_system_rates)
+    full_system_parameters = estimate_parameters(full_reaction_system_model_info, full_system_param,df)
 
     print("\n=== Parameter Schätzung für das vollständige System ==="
           f"\nModell: {full_reaction_system_model_info['description']}"
-          f"\nErgebnis: {reac_1_parameters}"
-          f"\nR²: {reac_1_parameters['r_squared']:.4f}")
+          f"\nErgebnis: {full_system_parameters}"
+          f"\nR²: {full_system_parameters['r_squared']:.4f}")
     for i, param_name in enumerate(full_reaction_system_model_info['param_names']):
-        param_val = reac_1_parameters['params'][i]
-        param_err = reac_1_parameters['param_errors'][i]
+        param_val = full_system_parameters['params'][i]
+        param_err = full_system_parameters['param_errors'][i]
         unit = full_reaction_system_model_info['param_units'][i]
         print(f"{param_name}: {param_val:.4f} ± {param_err:.4f} {unit}")
 

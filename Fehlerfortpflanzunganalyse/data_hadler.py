@@ -116,8 +116,13 @@ def add_noise_reaction_dict(reaction_data_dict, noise_level=0.1, verbose=False):
     for reaction_name, dataframe in reaction_data_dict.items():
         if verbose:
             print(f"Verrausche Reaktion: {reaction_name}")
-        noisy_dict[reaction_name] = add_noise_reaction(dataframe, noise_level, verbose=False)
-        
+        reaction_dict = {}
+        for component in dataframe:
+            if verbose:
+                print(f"  Komponente: {component}")
+            reaction_dict[component] = add_noise_reaction(dataframe[component], noise_level, verbose=False)
+        noisy_dict[reaction_name] = reaction_dict
+
     return noisy_dict
 
 
@@ -307,13 +312,13 @@ def calculate_activity(concentrations, absorption_data, time_points, slope_cal, 
 def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict, verbose=True):
 
 
-    processed_data = pd.DataFrame()
-   # Dataframe structure
-   # | reaction | s_1 | s_2 | ... | s_n | rates |
-
-    substrate_columns = [f"s_{i+1}" for i in range(reaction_params_dict["x_dimension"])]
-    columns = ["reaction"] + substrate_columns + ["rates"]
-    processed_data = pd.DataFrame(columns=columns)
+    processed_data_dict = {
+        "reaction" : [],
+        "rates" : []
+    }
+    
+    for c in range(reaction_params_dict["x_dimension"]):
+        processed_data_dict[f"c{c+1}"] = []
 
     for reaction_name, reaction_data in reaction_data_dict.items():
         if verbose:
@@ -322,46 +327,65 @@ def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict
         try:
             # Hole die entsprechenden Aktivitätsparameter
             if reaction_name in reaction_params_dict:
-                activity_params = reaction_params_dict[reaction_name]
+                params_dict = reaction_params_dict[reaction_name]
             else:
                 if verbose:
                     print(f"Warning: Keine Aktivitätsparameter für {reaction_name} gefunden")
-                processed_data = None
+                processed_data_dict = None
                 continue
-            # todo handle results per reaction
-            reaction_result = []
-            for (substrate_name, substrate_data) in substrate_data.items():
+
+            i = 1
+            for component_name, experimental_data in reaction_data.items():
                 # Extrahiere Daten aus CSV
-                concentrations = get_concentrations_from_csv(reaction_data)
-                absorption_data = get_absorption_data(reaction_data)
-                time_points = get_time_points(reaction_data)
+                concentrations = get_concentrations_from_csv(experimental_data)
+                absorption_data = get_absorption_data(experimental_data)
+                time_points = get_time_points(experimental_data)
 
-            # Berechne Aktivitäten (OHNE Well-Informationen wenn verbose=False)
-            result = calculate_activity(
-                concentrations, absorption_data, time_points, 
-                slope, activity_params, verbose=verbose
-            )
-            
-            if result is not None:
-                activities, valid_concentrations = result                
+                # Berechne Aktivitäten
+                result = calculate_activity(
+                    concentrations, absorption_data, time_points, 
+                    slope, params_dict, verbose=verbose
+                )
                 
-                processed_data["reaction"] = [reaction_name] * len(activities)
-                processed_data["rates"] = activities
+                if result is not None:
+                    activities, valid_concentrations = result
+                    if (len(activities) != len(valid_concentrations)):
+                        if verbose:
+                            print(f"FEHLER: Längen stimmen nicht überein - Activities: {len(activities)}, Concentrations: {len(valid_concentrations)}")
+                        continue
 
+                    number_of_valid_concentrations = len(valid_concentrations)
 
-                if verbose:
-                    print(f"✓ {reaction_name}: {len(activities)} gültige Datenpunkte")
-            else:
-                if verbose:
-                    print(f" {reaction_name}: Keine gültigen Daten")
-                processed_data = None
+                    processed_data_dict[f'c{i}'].extend(valid_concentrations)
+                    processed_data_dict['rates'].extend(activities)
+                    processed_data_dict['reaction'].extend([int(reaction_name[1:])] * number_of_valid_concentrations)
+
+                    for j in range(reaction_params_dict["x_dimension"]):
+                        if j+1 != i: 
+                            # falls der eintrag existiert: 
+                            if f'c{j+1}_const' in reaction_params_dict[reaction_name]:
+                                constant_value = [reaction_params_dict[reaction_name][f'c{j+1}_const']] * number_of_valid_concentrations
+                                processed_data_dict[f'c{j+1}'].extend(constant_value)
+                            else: 
+                                processed_data_dict[f'c{j+1}'].extend([0.0] * number_of_valid_concentrations)
+
+                    if verbose:
+                        print(f"✓ {reaction_name}: {len(activities)} gültige Datenpunkte")
+                else:
+                    if verbose:
+                        print(f" {reaction_name}: Keine gültigen Daten")
+                    processed_data_dict = None
+            
 
         except Exception as e:
             if verbose:
                 print(f" Fehler bei {reaction_name}: {e}")
-            processed_data = None
+            processed_data_dict = None
 
-    return processed_data
+    df = pd.DataFrame(processed_data_dict)
+    df.to_csv("processed_reaction_data.csv", index=True)
+
+    return df
 
 def create_reaction_rates_dict(processed_data):
     """
@@ -406,103 +430,14 @@ def create_concentrations_dict(processed_data, constants_dict=None):
     return concentrations_dict
 
 
-def make_fitting_data(model_info, data_info, concentrations, rates, verbose=True):
+def make_fitting_data(model_info, data_info, df, verbose=True):
+    """ 
+    Extrahiere aus dataframe die x und y Werte für das Fitting.
     """
-    Erstellt die Datenstruktur für das Fitting basierend auf Modell-Informationen.
-    Automatische Behandlung von variablen und konstanten Substratkonzentrationen.
-    
-    model_info: Dict mit Modell-Informationen (z.B. name, function, param_names, etc.)
-    concentrations: Dict mit Substratkonzentrationen
-    rates: Dict mit gemessenen Raten
-    verbose: Bool - ob Debug-Ausgaben gezeigt werden sollen
-    """
-    
-    # Extrahiere und kombiniere alle Aktivitäten
-    activities_list = [rates[key] for key in rates if key.endswith('_rates') and rates[key] is not None]
-    activities = np.concatenate(activities_list) if activities_list else np.array([])
-    
-    # Allgemeine Behandlung für Multi-Substrat-Modelle
-    substrate_keys = model_info['substrate_keys']
-    n_substrates = len(substrate_keys)
+    dim_x = data_info["x_dimension"]
+    dim_y = data_info["y_dimension"]
 
-    constants = data_info["constants"]
+    data_x = []
+    data_y = []
 
-    if n_substrates > 1:
-        # Sammle alle variablen Konzentrationen und deren konstante Partner
-        variable_data = []
-        constant_values = []
-        for substrate_key in substrate_keys:
-            var_conc_key = substrate_key  
-            
-            if substrate_key.endswith('_conc'):
-                const_key = substrate_key.replace('_conc', '_const')
-            else:
-                const_key = f"{substrate_key}_const"
-            
-            if var_conc_key in concentrations:
-                variable_data.append((substrate_key, concentrations[var_conc_key]))
-                
-                # Suche nach entsprechendem konstanten Wert
-                if const_key in constants:
-                    constant_values.append((substrate_key, constants[const_key]))
-                else:
-                    if verbose:
-                        print(f"Warning: Konstanter Wert für {substrate_key} nicht gefunden ({const_key})")
-                    constant_values.append((substrate_key, 1.0))  # Default-Wert
-        
-        # Erstelle kombinierte Substrat-Arrays
-        substrate_arrays = [[] for _ in range(n_substrates)]
-        
-        # Für jedes variable Substrat: erstelle Experimente
-        for var_idx, (var_substrate, var_concentrations) in enumerate(variable_data):
-            var_concentrations = np.array(var_concentrations)
-            n_var_points = len(var_concentrations)
-            
-            # Für jedes Substrat: füge entweder variable oder konstante Werte hinzu
-            for substrate_idx, substrate_key in enumerate(substrate_keys):
-                if substrate_key == var_substrate:
-                    # Das variable Substrat
-                    substrate_arrays[substrate_idx].extend(var_concentrations)
-                else:
-                    # Alle anderen Substrate sind konstant
-                    const_value = next((val for key, val in constant_values if key == substrate_key), 1.0)
-                    substrate_arrays[substrate_idx].extend([const_value] * n_var_points)
-        
-        # Konvertiere zu numpy arrays
-        substrate_data = [np.array(arr) for arr in substrate_arrays]
-        
-        return substrate_data, activities
-    
-    # Fallback für Ein-Substrat-Modelle
-    else:
-        substrate_data = []
-        
-        for substrate_key in substrate_keys:
-            if substrate_key in concentrations:
-                substrate_values = concentrations[substrate_key]
-                
-                if isinstance(substrate_values, (int, float)):
-                    substrate_array = np.full(len(activities), substrate_values)
-                else:
-                    substrate_array = np.array(substrate_values)
-                    
-                    if len(activities) > len(substrate_array):
-                        n_repeats = len(activities) // len(substrate_array)
-                        remainder = len(activities) % len(substrate_array)
-                        
-                        substrate_array = np.tile(substrate_array, n_repeats)
-                        if remainder > 0:
-                            substrate_array = np.concatenate([substrate_array, substrate_array[:remainder]])
-                    elif len(activities) < len(substrate_array):
-                        substrate_array = substrate_array[:len(substrate_array)]
-                
-                substrate_data.append(substrate_array)
-            else:
-                if verbose:
-                    print(f"Warning: Key '{substrate_key}' not found in concentrations")
-                substrate_data.append(np.zeros(len(activities)))
-
-        return substrate_data, activities
-
-
-
+    a = df.apply(lambda row: (row["reaction"],row["c1"],row["c2"],row["c3"]), axis=1).to_numpy()
