@@ -18,6 +18,7 @@ def add_noise_calibration(data, noise_level=0.1):
     noise = np.random.normal(0, noise_level, size=data.shape)
     return noisy_data + noise
 
+# working but not optimal better: df version
 def add_noise_reaction(data, noise_level=0.1, verbose=False):
     """
     Fügt Rauschen zu Reaktions-CSV-Daten hinzu.
@@ -131,6 +132,7 @@ def get_concentrations_from_csv(csv_data):
     # Spalte 2 (Index 1) enthält die Konzentrationen, ab Zeile 3 (Index 2)
     concentrations_raw = csv_data.iloc[2:, 1].dropna().values
     concentrations = [float(x) for x in concentrations_raw]
+
     return np.array(concentrations)
 
 def get_absorption_data(csv_data):
@@ -368,7 +370,7 @@ def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict
                                 processed_data_dict[f'c{j+1}'].extend(constant_value)
                             else: 
                                 processed_data_dict[f'c{j+1}'].extend([0.0] * number_of_valid_concentrations)
-
+                    i += 1
                     if verbose:
                         print(f"✓ {reaction_name}: {len(activities)} gültige Datenpunkte")
                 else:
@@ -376,14 +378,12 @@ def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict
                         print(f" {reaction_name}: Keine gültigen Daten")
                     processed_data_dict = None
             
-
         except Exception as e:
             if verbose:
                 print(f" Fehler bei {reaction_name}: {e}")
             processed_data_dict = None
 
     df = pd.DataFrame(processed_data_dict)
-    df.to_csv("processed_reaction_data.csv", index=True)
 
     return df
 

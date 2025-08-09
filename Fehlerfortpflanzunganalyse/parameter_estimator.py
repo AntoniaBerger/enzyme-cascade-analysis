@@ -3,8 +3,10 @@ import pandas as pd
 import numpy as np
 from scipy.optimize import curve_fit
 import pickle
-from data_hadler import  add_noise_reaction_dict, calculate_calibration, add_noise_calibration, create_concentrations_dict, create_reaction_rates_dict, get_rates_and_concentrations , make_fitting_data
+from simulator import cadet_simulation_full_system
+from data_handler import  add_noise_reaction_dict, calculate_calibration, add_noise_calibration, create_concentrations_dict, create_reaction_rates_dict, get_rates_and_concentrations , make_fitting_data
 
+from plotter import plot_monte_carlo_results, create_monte_carlo_report, plot_fitting_quality, plot_parameter_convergence
 
 
 def full_reaction_system(concentration_data, Vmax1, Vmax2, Vmax3, KmPD, KmNAD, KmLactol, KmNADH, KiPD, KiNAD, KiLactol):
@@ -140,6 +142,7 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
     print(f"{'='*60}")
     
     successful_results = []
+    simulation_results = []
     failed_counts = {"calibration": 0, "data_processing": 0, "fitting": 0, "validation": 0}
     
     # Progress Bar Setup
@@ -195,6 +198,19 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
                 failed_counts["fitting"] += 1
                 continue
             
+            try: 
+                # convert results into param dict:
+                params_dict = {name: value for name, value in zip(model_info["param_names"], result['params'])}
+                return_code = cadet_simulation_full_system(params_dict)
+
+                if return_code == 0: 
+                    simulation_results.append(return_code)
+           
+            except Exception as e:
+                print(f"Debug: Simulation error: {e}")  # Für Debug
+                failed_counts["simulation"] += 1
+                continue
+
             # 5. Validierung der Parameter
             try:
                 params = result['params']
@@ -204,7 +220,6 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
                 if (len(params) >= len(model_info["param_names"]) and 
                     all(p > 0 for p in params) and  
                     params[0] < 100 and  
-                    all(1e-6 < p < 10000 for p in params[1:]) and  
                     r_squared > 0.1):  
                     
                     successful_results.append(result)
@@ -236,11 +251,21 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
     n_successful = len(successful_results)
     print(f"\n=== ZUSAMMENFASSUNG ===")
     
+    n_success_sim = 0
     if n_iterations > 0:
         success_percentage = n_successful/n_iterations*100
         print(f"Erfolgreiche Iterationen: {n_successful}/{n_iterations} ({success_percentage:.1f}%)")
     else:
         print(f"Erfolgreiche Iterationen: {n_successful}/{n_iterations} (0.0%)")
+    
+    if len(simulation_results) > 0:
+        n_success_sim = np.sum(np.array(simulation_results) == 0)  # Simulations-Ergebnisse zählen
+        print(f"Erfolgreiche Simulationen: {n_success_sim}/{len(simulation_results)} ({n_success_sim / len(simulation_results) * 100:.1f}%)")
+    else:
+        print(f"Erfolgreiche Simulationen: {n_success_sim}/{len(simulation_results)} (0.0%)")
+
+
+
         
     print(f"Fehlschläge:")
     for reason, count in failed_counts.items():
@@ -280,7 +305,8 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
     
     # Erstelle Ergebnis-Dictionary
     mc_results = {
-        'n_successful': n_successful,
+        'n_successful_mc': n_successful,
+        'n_successful_sim': n_success_sim,
         'n_total': n_iterations,
         'success_rate': n_successful / n_iterations,
         'model_name': model_info['name'],
@@ -334,9 +360,14 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
                     corr = correlation_matrix[i, j]
                     print(f"{name1} ↔ {name2}: {corr:.3f}")
 
+    # Stelle sicher, dass das Results-Verzeichnis existiert
+    os.makedirs('Results', exist_ok=True)
+    
     # speicher ergebnisse in pickle
-    with open(f"monte_carlo_results_{model_info['name']}.pkl", "wb") as f:
+    results_path = os.path.join('Results', f"monte_carlo_results_{model_info['name']}.pkl")
+    with open(results_path, "wb") as f:
         pickle.dump(mc_results, f)
+    print(f"💾 Monte Carlo Ergebnisse gespeichert: {results_path}")
 
     return mc_results
 
@@ -457,16 +488,16 @@ if __name__ == "__main__":
             "Vf_well": 10.0,
             "Vf_prod": 5.0,
             "c_prod": 2.15,
-            "c1_const": 6.0,
-            "c2_const": 300.0,
-            "c3_const": 6.0
+            "c1_const": 300.0,
+            "c2_const": 0.6,
+            "c3_const": 0.0
         },
         "r3": {
             "Vf_well": 10.0,
             "Vf_prod": 10.0,
             "c_prod": 2.15,
-            "c1_const": 5.0,
-            "c2_const": 500.0
+            "c1_const": 500.0,
+            "c2_const": 5.0
         },
         "x_dimension": 3,
         "y_dimension": 1
@@ -477,8 +508,20 @@ if __name__ == "__main__":
         calibration_slope,
         full_system_param
     )
-
     
+    # Stelle sicher, dass das Results-Verzeichnis existiert
+    os.makedirs('Results', exist_ok=True)
+    
+    # Speichere im Results-Ordner
+    csv_path = os.path.join('Results', "full_system_processed_reaction_data.csv")
+    pkl_path = os.path.join('Results', "full_system_processed_reaction_data.pkl")
+    
+    df.to_csv(csv_path, index=True)
+    df.to_pickle(pkl_path)
+    
+    print(f"💾 Verarbeitete Reaktionsdaten gespeichert:")
+    print(f"   CSV: {csv_path}")
+    print(f"   PKL: {pkl_path}")
 
     def full_reaction_system(concentration_data, Vmax1, Vmax2, Vmax3, KmPD, KmNAD, KmLactol, KmNADH, KiPD, KiNAD, KiLactol):
         """
@@ -563,6 +606,8 @@ if __name__ == "__main__":
 
     full_system_parameters = estimate_parameters(full_reaction_system_model_info, full_system_param,df)
 
+
+
     print("\n=== Parameter Schätzung für das vollständige System ==="
           f"\nModell: {full_reaction_system_model_info['description']}"
           f"\nErgebnis: {full_system_parameters}"
@@ -584,25 +629,22 @@ if __name__ == "__main__":
         full_reaction_system_model_info,
         full_system_param,
         noise_level,
-        n_iterations=1000
+        n_iterations=10
     )
 
     if monte_carlo_results:
-        print("\n" + "="*60)
-        print("📊 MONTE CARLO ERGEBNISSE")
-        print("="*60)
-        print(f"✅ Erfolgreiche Iterationen: {monte_carlo_results['n_successful']}/{monte_carlo_results['n_total']}")
-        print(f"📈 Erfolgsrate: {monte_carlo_results['success_rate']*100:.1f}%")
-        print(f"📊 R² (Mittelwert): {monte_carlo_results['R_squared_mean']:.4f} ± {monte_carlo_results['R_squared_std']:.4f}")
-
-        param_names = monte_carlo_results['param_names']
-        param_units = full_reaction_system_model_info['param_units']
-
-        for i, param_name in enumerate(param_names):
-            mean_key = f"{param_name}_mean"
-            std_key = f"{param_name}_std"
-            if mean_key in monte_carlo_results and std_key in monte_carlo_results:
-                unit = param_units[i] if i < len(param_units) else ""
-                print(f"🔸 {param_name}: {monte_carlo_results[mean_key]:.4f} ± {monte_carlo_results[std_key]:.4f} {unit}")
+        print("\n✅ Monte Carlo Simulation erfolgreich abgeschlossen!")
+        print(f"Erfolgreiche Iterationen: {monte_carlo_results['n_successful']}/{monte_carlo_results['n_total']} ({monte_carlo_results['success_rate']*100:.1f}%)")
+        
+        # Stelle sicher, dass das Results-Verzeichnis existiert
+        os.makedirs('Results', exist_ok=True)
+        
+        # Plot Ergebnisse - alle werden automatisch in Results gespeichert
+        plot_monte_carlo_results(monte_carlo_results, full_reaction_system_model_info)
+        #create_monte_carlo_report(monte_carlo_results, full_reaction_system_model_info)
+        
+        # Fitting-Qualität und Konvergenz
+        #plot_fitting_quality(monte_carlo_results, full_reaction_system_model_info)
+        #plot_parameter_convergence(monte_carlo_results, full_reaction_system_model_info)
     else:
         print("\n❌ Monte Carlo Simulation fehlgeschlagen!")
