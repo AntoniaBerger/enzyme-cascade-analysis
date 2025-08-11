@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from scipy.stats import linregress
 
-def is_linear(x, y, threshold=0.80):
+def is_linear(x, y, threshold=0.77):
     """Prüft ob Daten linear sind basierend auf R² (gelockerte Kriterien für mehr Datenpunkte)"""
     if len(x) < 3 or len(y) < 3:
         return False
@@ -264,7 +264,7 @@ def calculate_activity(concentrations, absorption_data, time_points, slope_cal, 
             slope, intercept_test, r_value_test, p_value_test, std_err_test = linregress(time_final, abs_final)
             r_squared = r_value_test**2
             
-            if verbose and r_squared < 0.90:
+            if verbose and r_squared < 0.70:
                 print(f"Well {i+1} (Konz: {conc_float} mM): R² = {r_squared:.3f} - nicht linear genug")
                 continue
             elif not is_linear(time_final, abs_final):
@@ -384,7 +384,7 @@ def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict
             processed_data_dict = None
 
     df = pd.DataFrame(processed_data_dict)
-
+    df.to_csv("processed_reaction_data.csv", index=False)
     return df
 
 def create_reaction_rates_dict(processed_data):

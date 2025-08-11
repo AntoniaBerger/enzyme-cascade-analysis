@@ -1,7 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from cadet import Cadet
-
+import pickle
+import os
+import shutil
 
 def create_base_system(model, ncomp, init_c):
     """Create a basic CSTR system with inlet, CSTR and outlet"""
@@ -28,8 +30,8 @@ def create_base_system(model, ncomp, init_c):
     # Return data
     model.root.input['return'].split_components_data = 0
     model.root.input['return'].split_ports_data = 0
-    model.root.input['return'].unit_000.write_solution_bulk = 1
-    model.root.input['return'].unit_000.write_solution_inlet = 1
+    model.root.input['return'].unit_000.write_solution_bulk = 0
+    model.root.input['return'].unit_000.write_solution_inlet = 0
     model.root.input['return'].unit_000.write_solution_outlet = 1
 
     model.root.input['return'].unit_001 = model.root.input['return'].unit_000
@@ -74,7 +76,7 @@ def add_reaction_system(model, parameters):
     
     Km_PD, Km_NAD, Km_Lactol, Km_NADH = parameters['KmPD'], parameters['KmNAD'], parameters['KmLactol'], parameters['KmNADH']
 
-    Ki_PD, Ki_NAD, Ki_Lacton = parameters['KiPD'], parameters['KiNAD'], parameters['KiLactol']
+    Ki_PD = parameters['KiPD']
 
     vmax1_per_mg, vmax2_per_mg, vmax3_per_mg = parameters['Vmax1'], parameters['Vmax2'], parameters['Vmax3']
 
@@ -94,19 +96,19 @@ def add_reaction_system(model, parameters):
             [0.0, 0.0, 0.0, 0.0, 0.0],   # NAD
             [0.0, 0.0, 0.0, 0.0, 0.0],   # LTOL
             [0.0, 0.0, 0.0, 0.0, 0.0],   # NADH
-            [0.0, 0.0, 0.0, 0.0, 0.0]    # LTOL
+            [0.0, 0.0, 0.0, 0.0, 0.0]    # LTO
         ],
         [
             [0.0, 0.0, 0.0, 0.0, 0.0],   # PD
             [0.0, 0.0, 0.0, 0.0, 0.0],   # NAD
             [Ki_PD, 0.0, 0.0, 0.0, 0.0],  # LTOL
-            [0.0, Ki_NAD, 0.0, 0.0, 0.0], # NADH
+            [0.0, 0, 0.0, 0.0, 0.0], # NADH
             [0.0, 0.0, 0.0, 0.0, 0.0]    # LTOL
         ],
         [
             [0.0, 0.0, 0.0, 0.0, 0.0],   # PD
             [0.0, 0.0, 0.0, 0.0, 0.0],   # NAD
-            [0.0, 0.0, 0.0, 0.0, Ki_Lacton],   # LTOL
+            [0.0, 0.0, 0.0, 0.0, 0],   # LTOL
             [0.0, 0.0, 0.0, 0.0, 0.0],   # NADH
             [0.0, 0.0, 0.0, 0.0, 0.0]    # LTOL
         ]
@@ -147,7 +149,7 @@ def add_reaction_system(model, parameters):
             [ 0, 0, 1]      # LTON
     ]
 
-def cadet_simulation_full_system(parameters, sim_time=300.0):
+def cadet_simulation_full_system(parameters, sim_time=300.0, cm_iteration = 0):
     
     install_path = r'C:\Users\berger\CADET-Core\out\install\DEBUG\bin\cadet-cli.exe'
     model_do = Cadet(install_path)
@@ -166,5 +168,33 @@ def cadet_simulation_full_system(parameters, sim_time=300.0):
     model_do.save()
     data_mm = model_do.run()
     model_do.load()
+
+    # Speichere die Ergebnisse in einer Datei
+    simulation_dir = "Results/Simulations"  # Konsistent mit Results-Struktur
+    if os.path.exists(simulation_dir):
+        shutil.rmtree(simulation_dir)
+        print(f"🗑️ Simulations-Ordner gelöscht: {simulation_dir}")
+    os.makedirs(simulation_dir, exist_ok=True)
+    
+    # Speichere die Ergebnisse
+    simulation_file = os.path.join(simulation_dir, f"full_system_simulation_results_{cm_iteration}.pkl")
+    
+    try:
+        with open(simulation_file, "wb") as f:
+            pickle.dump(model_do, f)
+        
+        # Reduzierte Ausgaben (nur jede 10. Iteration)
+        if cm_iteration % 10 == 0:
+            print(f"💾 Simulation {cm_iteration} gespeichert: {simulation_file}")
+            
+    except Exception as e:
+        print(f"⚠️ Fehler beim Speichern der Simulation {cm_iteration}: {e}")
+        # Gib trotzdem return_code zurück, auch wenn Speichern fehlschlägt
+
+    try:
+        if os.path.exists(model_do.filename):
+            os.remove(model_do.filename)
+    except:
+        pass  # Ignoriere Aufräum-Fehler
 
     return data_mm.return_code

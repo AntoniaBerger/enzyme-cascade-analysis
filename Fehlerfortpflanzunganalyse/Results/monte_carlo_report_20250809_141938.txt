@@ -1,0 +1,39 @@
+================================================================================
+MONTE CARLO SIMULATION BERICHT
+================================================================================
+
+Modell: Komplettes Drei-Reaktions-System mit Inhibitionen
+Datum: 2025-08-09 14:19:38
+
+SIMULATIONSSTATISTIKEN:
+------------------------------
+Gesamte Iterationen: 100
+Erfolgreiche Iterationen: 100
+Erfolgsrate: 100.00%
+
+PARAMETER-ERGEBNISSE:
+------------------------------
+Vmax1       :   0.0816 ± 0.0016 U    [  0.0778,   0.0862]
+Vmax2       : 210.9553 ± 842.6297 U    [  3.5181, 7453.0246]
+Vmax3       : 735.4554 ± 124.4360 U    [480.5805, 1113.5642]
+KmPD        :  96.9057 ± 1.5916 mM   [ 93.3969, 102.4211]
+KmNAD       :   2.3325 ± 0.0313 mM   [  2.2655,   2.4386]
+KmLactol    : 106.7576 ± 18.3630 mM   [ 71.0125, 161.3847]
+KmNADH      : 208.9407 ± 842.4697 mM   [  3.3962, 7512.8558]
+KiPD        : 114785029.6674 ± 819345248.0643 mM   [147.6315, 8138290958.4896]
+KiNAD       : 101691.5526 ± 918188.5679 mM   [475.6058, 9198965.7792]
+KiLactol    :   0.3006 ± 0.0035 mM   [  0.2918,   0.3106]
+
+R² STATISTIKEN:
+------------------------------
+R² Mittelwert: 0.911978
+R² Standardabweichung: 0.000668
+R² Minimum: 0.910264
+R² Maximum: 0.913478
+
+FEHLSCHLAG-ANALYSE:
+------------------------------
+calibration         :      0 (0.00%)
+data_processing     :      0 (0.00%)
+fitting             :      0 (0.00%)
+validation          :      0 (0.00%)

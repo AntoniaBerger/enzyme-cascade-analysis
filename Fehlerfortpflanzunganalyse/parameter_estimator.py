@@ -9,59 +9,6 @@ from data_handler import  add_noise_reaction_dict, calculate_calibration, add_no
 from plotter import plot_monte_carlo_results, create_monte_carlo_report, plot_fitting_quality, plot_parameter_convergence
 
 
-def full_reaction_system(concentration_data, Vmax1, Vmax2, Vmax3, KmPD, KmNAD, KmLactol, KmNADH, KiPD, KiNAD, KiLactol):
-    """
-    Wrapper für curve_fit Kompatibilität - nimmt flache Parameter entgegen
-    Berechnet die Enzymaktivität für das vollständige Drei-Reaktions-System
-    
-    ALLE DREI REAKTIONEN:
-    - Reaktion 1: PD + NAD → Pyruvat + NADH
-    - Reaktion 2: Lactol + NADH → ... (mit PD/NAD Inhibition)
-    - Reaktion 3: Lactol + NAD → ... (mit Lactol Inhibition)
-    """
-    # Entpacke Substratkonzentrationen, Inhibitor-Konzentrationen und Reaktions-IDs
-    # test if concentration_data has the right shape
-    if len(concentration_data) != 4 or len(concentration_data[0]) == 0:
-        raise ValueError("concentration_data must contain 4 arrays: S1, S2, Inhibitor, reaction_ids")
-    
-    S1, S2, Inhibitor, reaction_ids = concentration_data
-    
-    # Initialisiere Ergebnis-Array
-    V_obs = np.zeros_like(S1, dtype=float)
-    
-    # Reaktion 1: PD + NAD → Pyruvat + NADH
-    reaction_1_mask = (reaction_ids == 1)
-    if np.any(reaction_1_mask):
-        # S1 = NAD oder konstante NAD, S2 = PD oder konstante PD
-        S1_r1 = S1[reaction_1_mask] # NAD
-        S2_r1 = S2[reaction_1_mask] # PD
-        
-        V_obs[reaction_1_mask] = (Vmax1 * S1_r1 * S2_r1) / (
-            (KmPD + S2_r1) *  (KmNAD + S1_r1)
-        )
-    
-    # Reaktion 2: Lactol + NADH → ... (mit PD Inhibition)
-    reaction_2_mask = (reaction_ids == 2)
-    if np.any(reaction_2_mask):
-        S1_r2 = S1[reaction_2_mask]  # Lactol
-        S2_r2 = S2[reaction_2_mask]  # NADH
-        PD_inhibitor = Inhibitor[reaction_2_mask]  # Variable PD-Konzentration als Inhibitor
-        
-        V_obs[reaction_2_mask] = (Vmax2 * S1_r2 * S2_r2) / (
-            (KmLactol * (1 + PD_inhibitor/KiPD) + S1_r2) * (KmNADH * (1 + PD_inhibitor/KiNAD) + S2_r2)
-        )
-    # Reaktion 3: Lactol + NAD → ... (mit Lactol Selbst-Inhibition)
-    reaction_3_mask = (reaction_ids == 3)
-    if np.any(reaction_3_mask):
-        S1_r3 = S1[reaction_3_mask]  # Lactol
-        S2_r3 = S2[reaction_3_mask]  # NAD
-        
-        V_obs[reaction_3_mask] = (Vmax3 * S1_r3 * S2_r3) / (
-            (KmLactol * (1 + S1_r3/KiLactol) + S1_r3) * (KmNAD + S2_r3)
-        )
-    
-    return V_obs
-
 # Setze Funktions-Referenzen in AVAILABLE_MODELS
 
 def fit_parameters(substrate_data, activities, model_info, verbose=True):
@@ -201,7 +148,7 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
             try: 
                 # convert results into param dict:
                 params_dict = {name: value for name, value in zip(model_info["param_names"], result['params'])}
-                return_code = cadet_simulation_full_system(params_dict)
+                return_code = cadet_simulation_full_system(params_dict, cm_iteration=iteration)
 
                 if return_code == 0: 
                     simulation_results.append(return_code)
@@ -265,8 +212,6 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
         print(f"Erfolgreiche Simulationen: {n_success_sim}/{len(simulation_results)} (0.0%)")
 
 
-
-        
     print(f"Fehlschläge:")
     for reason, count in failed_counts.items():
         print(f"  - {reason}: {count}")
@@ -490,7 +435,7 @@ if __name__ == "__main__":
             "c_prod": 2.15,
             "c1_const": 300.0,
             "c2_const": 0.6,
-            "c3_const": 0.0
+            "c3_const": 100.0
         },
         "r3": {
             "Vf_well": 10.0,
@@ -523,7 +468,7 @@ if __name__ == "__main__":
     print(f"   CSV: {csv_path}")
     print(f"   PKL: {pkl_path}")
 
-    def full_reaction_system(concentration_data, Vmax1, Vmax2, Vmax3, KmPD, KmNAD, KmLactol, KmNADH, KiPD, KiNAD, KiLactol):
+    def full_reaction_system(concentration_data, Vmax1, Vmax2, Vmax3, KmPD, KmNAD, KmLactol, KmNADH, KiPD):
         """
         Wrapper für curve_fit Kompatibilität - nimmt flache Parameter entgegen
         Berechnet die Enzymaktivität für das vollständige Drei-Reaktions-System
@@ -539,7 +484,7 @@ if __name__ == "__main__":
         # Initialisiere Ergebnis-Array
         V_obs = np.zeros_like(S1, dtype=float)
         
-        # Reaktion 1: PD + NAD → Pyruvat + NADH
+        # Reaktion 1: PD + NAD → HD + NADH
         reaction_1_mask = (reaction_ids == 1)
         if np.any(reaction_1_mask):
             # S1 = NAD oder konstante NAD, S2 = PD oder konstante PD
@@ -556,18 +501,16 @@ if __name__ == "__main__":
             S1_r2 = S1[reaction_2_mask]  # Lactol
             S2_r2 = S2[reaction_2_mask]  # NADH
             PD_inhibitor = Inhibitor[reaction_2_mask]  # Variable PD-Konzentration als Inhibitor
-            
             V_obs[reaction_2_mask] = (Vmax2 * S1_r2 * S2_r2) / (
-                (KmLactol * (1 + PD_inhibitor/KiPD) + S1_r2) * (KmNADH * (1 + PD_inhibitor/KiNAD) + S2_r2)
+                (KmLactol * (1 + PD_inhibitor/KiPD) + S1_r2) * (KmNADH  + S2_r2)
             )
-        # Reaktion 3: Lactol + NAD → ... (mit Lactol Selbst-Inhibition)
+        # Reaktion 3: Lactol + NAD 
         reaction_3_mask = (reaction_ids == 3)
         if np.any(reaction_3_mask):
             S1_r3 = S1[reaction_3_mask]  # Lactol
             S2_r3 = S2[reaction_3_mask]  # NAD
-            
             V_obs[reaction_3_mask] = (Vmax3 * S1_r3 * S2_r3) / (
-                (KmLactol * (1 + S1_r3/KiLactol) + S1_r3) * (KmNAD + S2_r3)
+                (KmLactol  + S1_r3) * (KmNAD + S2_r3)
             )
         
         return V_obs
@@ -579,28 +522,26 @@ if __name__ == "__main__":
         "param_names": [
             "Vmax1", "Vmax2", "Vmax3",
             "KmPD", "KmNAD", "KmLactol", "KmNADH",
-            "KiPD", "KiNAD", "KiLactol"
+            "KiPD"
         ],
         "param_units": [
             "U", "U", "U",
             "mM", "mM", "mM", "mM",
-            "mM", "mM", "mM"
+            "mM"
         ],
         "substrate_keys": ["S1", "S2", "Inhibitor", "reaction_ids"],
         "initial_guess_func": lambda activities, substrate_data: [
             max(activities) if len(activities) > 0 else 1.0,  # Vmax1
             max(activities) if len(activities) > 0 else 1.0,  # Vmax2
             max(activities) if len(activities) > 0 else 1.0,  # Vmax3
-            1.0,  # KmPD
-            1.0,  # KmNAD
-            1.0,  # KmLactol
-            1.0,  # KmNADH
-            1.0,  # KiPD
-            1.0,  # KiNAD
-            1.0   # KiLactol
+            84.0,  # KmPD
+            2.2,  # KmNAD
+            75.0,  # KmLactol
+            2.0,  # KmNADH
+            90.0  # KiPD
         ],
-        "bounds_lower": [0]*10,
-        "bounds_upper": [np.inf]*10,
+        "bounds_lower": [0]*8,
+        "bounds_upper": [np.inf]*8,
         "description": "Komplettes Drei-Reaktions-System mit Inhibitionen"
     }
 

@@ -1,3 +1,4 @@
+from copyreg import pickle
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
@@ -5,22 +6,70 @@ import pandas as pd
 from matplotlib.patches import Rectangle
 import warnings
 import os
+import pickle
+import glob
+    
 warnings.filterwarnings('ignore')
 
 # Set style
 plt.style.use('seaborn-v0_8-darkgrid')
 sns.set_palette("husl")
 
-def plot_monte_carlo_results(monte_carlo_results, model_info, save_path=None, show_plots=True):
+def plot_monte_carlo_results_from_file(pkl_file_path, save_path=None, show_plots=True):
+    """
+    Lädt Monte Carlo Ergebnisse aus PKL-Datei und erstellt Plots
+    
+    Args:
+        pkl_file_path: Pfad zur PKL-Datei mit Monte Carlo Ergebnissen
+        save_path: Optional - Pfad zum Speichern der Plots
+        show_plots: Bool - Ob Plots angezeigt werden sollen
+    """
+    
+    try:
+        with open(pkl_file_path, 'rb') as f:
+            data = pickle.load(f)
+        
+        # Extrahiere Monte Carlo Ergebnisse und Model Info
+        if isinstance(data, dict) and 'monte_carlo_results' in data and 'model_info' in data:
+            monte_carlo_results = data['monte_carlo_results']
+            model_info = data['model_info']
+        else:
+            # Falls direkt Monte Carlo Ergebnisse gespeichert wurden
+            monte_carlo_results = data
+            # Standard Model Info falls nicht vorhanden
+            model_info = {
+                'param_names': [key.replace('_values', '') for key in monte_carlo_results.keys() if key.endswith('_values')],
+                'param_units': [''] * len([key for key in monte_carlo_results.keys() if key.endswith('_values')]),
+                'description': 'Loaded from PKL file'
+            }
+        
+        print(f"📂 Monte Carlo Daten geladen aus: {pkl_file_path}")
+        
+        # Rufe die ursprüngliche Plot-Funktion auf
+        plot_monte_carlo_results(monte_carlo_results, model_info, save_path, show_plots)
+        
+    except Exception as e:
+        print(f"❌ Fehler beim Laden der PKL-Datei {pkl_file_path}: {e}")
+
+def plot_monte_carlo_results(monte_carlo_results_or_file, model_info=None, save_path=None, show_plots=True):
     """
     Erstellt umfassende Plots für Monte Carlo Simulationsergebnisse
     
     Args:
-        monte_carlo_results: Dict mit Monte Carlo Ergebnissen
-        model_info: Dict mit Modellinformationen (param_names, param_units, etc.)
-        save_path: Optional - Pfad zum Speichern der Plots (Standard: Results/monte_carlo_results.png)
+        monte_carlo_results_or_file: Dict mit Monte Carlo Ergebnissen ODER Pfad zur PKL-Datei
+        model_info: Dict mit Modellinformationen (nur nötig wenn erste Argument Dict ist)
+        save_path: Optional - Pfad zum Speichern der Plots
         show_plots: Bool - Ob Plots angezeigt werden sollen
     """
+    
+    # Prüfe ob es ein String (Dateipfad) oder Dict ist
+    if isinstance(monte_carlo_results_or_file, str):
+        # Es ist ein Dateipfad - lade die Daten
+        plot_monte_carlo_results_from_file(monte_carlo_results_or_file, save_path, show_plots)
+        return
+    
+    # Es ist ein Dict - verwende wie bisher
+    monte_carlo_results = monte_carlo_results_or_file
     
     if not monte_carlo_results or monte_carlo_results.get('n_successful', 0) == 0:
         print("⚠️ Keine erfolgreichen Monte Carlo Iterationen zum Plotten verfügbar")
@@ -228,7 +277,6 @@ def plot_monte_carlo_results(monte_carlo_results, model_info, save_path=None, sh
     if show_plots:
         plt.show()
 
-
 def plot_parameter_convergence(monte_carlo_results, model_info, save_path=None, show_plots=True):
     """
     Zeigt die Konvergenz der Parameter über die Monte Carlo Iterationen
@@ -318,7 +366,6 @@ def plot_parameter_convergence(monte_carlo_results, model_info, save_path=None, 
     
     if show_plots:
         plt.show()
-
 
 def plot_fitting_quality(monte_carlo_results, processed_data=None, model_info=None, save_path=None, show_plots=True):
     """
@@ -438,7 +485,6 @@ def plot_fitting_quality(monte_carlo_results, processed_data=None, model_info=No
         plt.show()
         plt.show()
 
-
 def create_monte_carlo_report(monte_carlo_results, model_info, save_path=None):
     """
     Erstellt einen umfassenden Bericht der Monte Carlo Ergebnisse
@@ -524,10 +570,484 @@ def create_monte_carlo_report(monte_carlo_results, model_info, save_path=None):
     print(f"📄 Bericht gespeichert als: {report_file}")
     print("✅ Monte Carlo Analyse abgeschlossen!")
 
+def plot_simulation_results(simulation_dir="Results/Simulations", save_path=None, show_plots=True, max_files=None):
+    """
+    Lädt und plottet CADET Simulationsergebnisse aus PKL-Dateien
+    
+    Args:
+        simulation_dir: Pfad zum Ordner mit den PKL-Dateien
+        save_path: Optional - Pfad zum Speichern des Plots (Standard: Results/simulation_results.png)
+        show_plots: Bool - Ob Plots angezeigt werden sollen
+        max_files: Optional - Maximale Anzahl der zu ladenden Dateien (für Performance)
+    """
+    
 
-# Utility-Funktion für schnelle Plots
-def quick_monte_carlo_plot(monte_carlo_results, model_info):
+    # Standard-Speicherpfad im Results-Ordner
+    if save_path is None:
+        save_path = os.path.join('Results', 'simulation_results.png')
+    
+    # Finde alle PKL-Dateien
+    pkl_pattern = os.path.join(simulation_dir, "full_system_simulation_results_*.pkl")
+    pkl_files = glob.glob(pkl_pattern)
+    
+    if not pkl_files:
+        print(f"⚠️ Keine Simulationsdateien in {simulation_dir} gefunden!")
+        return
+    
+    # Sortiere nach Dateinamen (Iteration)
+    pkl_files.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    
+    # Begrenze Anzahl der Dateien falls gewünscht
+    if max_files and len(pkl_files) > max_files:
+        pkl_files = pkl_files[:max_files]
+        print(f"📊 Lade ersten {max_files} von {len(glob.glob(pkl_pattern))} Simulationsdateien...")
+    
+    print(f"📂 Lade {len(pkl_files)} Simulationsdateien...")
+    
+    # Listen für alle Simulationen
+    all_concentrations = []
+    all_timepoints = []
+    iteration_numbers = []
+    
+    # Lade alle Simulationsergebnisse
+    for i, pkl_file in enumerate(pkl_files):
+        try:
+            with open(pkl_file, 'rb') as f:
+                model = pickle.load(f)
+            
+            # Extrahiere Konzentrationen und Zeitpunkte
+            concentrations = model.root.output.solution.unit_001.solution_outlet
+            timepoints = model.root.output.solution.solution_times
+            
+            all_concentrations.append(concentrations)
+            all_timepoints.append(timepoints)
+            
+            # Extrahiere Iterations-Nummer aus Dateiname
+            iteration_num = int(pkl_file.split('_')[-1].split('.')[0])
+            iteration_numbers.append(iteration_num)
+            
+            if (i + 1) % 10 == 0:
+                print(f"  Geladen: {i + 1}/{len(pkl_files)} Dateien")
+                
+        except Exception as e:
+            print(f"⚠️ Fehler beim Laden von {pkl_file}: {e}")
+            continue
+    
+    if not all_concentrations:
+        print("❌ Keine gültigen Simulationsdaten gefunden!")
+        return
+    
+    print(f"✅ {len(all_concentrations)} Simulationen erfolgreich geladen")
+    
+    # Komponentennamen (basierend auf deiner Simulation)
+    component_names = ['PD', 'NAD', 'Lactol', 'NADH', 'Lacton']
+    n_components = len(component_names)
+    
+    # Erstelle umfassende Plots
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    fig.suptitle('CADET Simulationsergebnisse - Monte Carlo Ensemble', fontsize=16, fontweight='bold')
+    
+    # 1. Alle Simulationen übereinander (alle Komponenten)
+    ax1 = axes[0, 0]
+    colors = plt.cm.Set1(np.linspace(0, 1, n_components))
+    
+    for i, (concentrations, timepoints) in enumerate(zip(all_concentrations, all_timepoints)):
+        alpha = 0.1 if len(all_concentrations) > 50 else 0.3
+        
+        for comp_idx in range(min(n_components, concentrations.shape[1])):
+            if i == 0:  # Label nur für erste Simulation
+                ax1.plot(timepoints, concentrations[:, comp_idx], 
+                        color=colors[comp_idx], alpha=alpha, 
+                        label=component_names[comp_idx])
+            else:
+                ax1.plot(timepoints, concentrations[:, comp_idx], 
+                        color=colors[comp_idx], alpha=alpha)
+    
+    ax1.set_xlabel('Zeit [s]')
+    ax1.set_ylabel('Konzentration [mM]')
+    ax1.set_title('Alle Simulationen - Alle Komponenten')
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    ax1.set_yscale('log')  # Logarithmische Skala wegen großer Wertebereiche
+    
+    # 2. Mittelwert und Standardabweichung
+    ax2 = axes[0, 1]
+    
+    # Interpoliere alle Simulationen auf gemeinsame Zeitachse
+    common_time = all_timepoints[0]  # Verwende erste Zeitachse als Referenz
+    
+    interpolated_concentrations = []
+    for concentrations, timepoints in zip(all_concentrations, all_timepoints):
+        interp_conc = np.zeros((len(common_time), concentrations.shape[1]))
+        for comp_idx in range(concentrations.shape[1]):
+            interp_conc[:, comp_idx] = np.interp(common_time, timepoints, concentrations[:, comp_idx])
+        interpolated_concentrations.append(interp_conc)
+    
+    # Berechne Statistiken
+    conc_array = np.array(interpolated_concentrations)  # [n_sims, n_time, n_components]
+    mean_conc = np.mean(conc_array, axis=0)  # [n_time, n_components]
+    std_conc = np.std(conc_array, axis=0)    # [n_time, n_components]
+    
+    for comp_idx in range(min(n_components, mean_conc.shape[1])):
+        ax2.plot(common_time, mean_conc[:, comp_idx], 
+                color=colors[comp_idx], linewidth=2, 
+                label=f'{component_names[comp_idx]} (Mean)')
+        ax2.fill_between(common_time, 
+                        mean_conc[:, comp_idx] - std_conc[:, comp_idx],
+                        mean_conc[:, comp_idx] + std_conc[:, comp_idx],
+                        color=colors[comp_idx], alpha=0.3)
+    
+    ax2.set_xlabel('Zeit [s]')
+    ax2.set_ylabel('Konzentration [mM]')
+    ax2.set_title('Mittelwert ± Standardabweichung')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    ax2.set_yscale('log')
+    
+    # 3. Einzelne Komponenten in separaten Subplots
+    component_plots = [axes[0, 2], axes[1, 0], axes[1, 1]]
+    for comp_idx, ax in enumerate(component_plots):
+        if comp_idx < n_components:
+            # Alle Simulationen für diese Komponente
+            for concentrations, timepoints in zip(all_concentrations, all_timepoints):
+                alpha = 0.1 if len(all_concentrations) > 50 else 0.3
+                ax.plot(timepoints, concentrations[:, comp_idx], 
+                       color=colors[comp_idx], alpha=alpha)
+            
+            # Mittelwert hervorheben
+            ax.plot(common_time, mean_conc[:, comp_idx], 
+                   color='black', linewidth=3, 
+                   label=f'Mean {component_names[comp_idx]}')
+            
+            ax.set_xlabel('Zeit [s]')
+            ax.set_ylabel('Konzentration [mM]')
+            ax.set_title(f'{component_names[comp_idx]} Konzentration')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            
+            # Setze Y-Achse je nach Komponente
+            if component_names[comp_idx] in ['NADH', 'Lactol', 'Lacton']:
+                ax.set_yscale('log')
+    
+    # 4. Endkonzentrationen (nach 500s)
+    ax_final = axes[1, 2]
+    
+    final_concentrations = []
+    for concentrations in all_concentrations:
+        final_concentrations.append(concentrations[-1, :])  # Letzte Zeitpunkt
+    
+    final_conc_array = np.array(final_concentrations)
+    
+    # Boxplot der Endkonzentrationen
+    box_data = [final_conc_array[:, i] for i in range(min(n_components, final_conc_array.shape[1]))]
+    box_labels = component_names[:len(box_data)]
+    
+    box_plot = ax_final.boxplot(box_data, labels=box_labels, patch_artist=True)
+    
+    # Färbe Boxplots
+    for patch, color in zip(box_plot['boxes'], colors):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.7)
+    
+    ax_final.set_ylabel('Endkonzentration [mM]')
+    ax_final.set_title('Endkonzentrationen (t=500s)')
+    ax_final.set_yscale('log')
+    ax_final.grid(True, alpha=0.3)
+    ax_final.tick_params(axis='x', rotation=45)
+    
+    plt.tight_layout()
+    
+    # Speichern
+    if save_path:
+        os.makedirs('Results', exist_ok=True)
+        
+        if save_path.endswith('.png'):
+            filename = save_path
+        else:
+            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"Results/simulation_results_{timestamp}.png"
+            
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        print(f"📊 Simulationsplots gespeichert als: {filename}")
+    
+    if show_plots:
+        plt.show()
+    
+    # Zusätzliche Statistik-Ausgabe
+    print("\n" + "="*50)
+    print("📊 SIMULATIONSSTATISTIKEN")
+    print("="*50)
+    print(f"Anzahl Simulationen: {len(all_concentrations)}")
+    print(f"Simulationszeit: {common_time[-1]:.1f} s")
+    print(f"Komponenten: {', '.join(component_names)}")
+    
+    print("\nENDKONZENTRATIONEN (Mittelwert ± Std):")
+    for i, comp_name in enumerate(component_names):
+        if i < final_conc_array.shape[1]:
+            mean_final = np.mean(final_conc_array[:, i])
+            std_final = np.std(final_conc_array[:, i])
+            print(f"  {comp_name:8s}: {mean_final:8.4f} ± {std_final:6.4f} mM")
+
+def plot_single_simulation(pkl_file, save_path=None, show_plots=True):
     """
-    Erstellt schnelle Übersichts-Plots für Monte Carlo Ergebnisse
+    Plottet eine einzelne Simulation aus einer PKL-Datei
+    
+    Args:
+        pkl_file: Pfad zur PKL-Datei
+        save_path: Optional - Pfad zum Speichern 
+        show_plots: Bool - Ob Plot angezeigt werden soll
     """
-    plot_monte_carlo_results(monte_carlo_results, model_info, save_path=None, show_plots=True)
+    
+    try:
+        with open(pkl_file, 'rb') as f:
+            model = pickle.load(f)
+        
+        # Extrahiere Daten
+        concentrations = model.root.output.solution.unit_001.solution_outlet
+        timepoints = model.root.output.solution.solution_times
+        
+    except Exception as e:
+        print(f"❌ Fehler beim Laden von {pkl_file}: {e}")
+        return
+    
+    # Komponentennamen
+    component_names = ['PD', 'NAD', 'Lactol', 'NADH', 'Lacton']
+    colors = plt.cm.Set1(np.linspace(0, 1, len(component_names)))
+    
+    plt.figure(figsize=(12, 8))
+    
+    for comp_idx in range(min(len(component_names), concentrations.shape[1])):
+        plt.plot(timepoints, concentrations[:, comp_idx], 
+                color=colors[comp_idx], linewidth=2, 
+                label=component_names[comp_idx], marker='o', markersize=3)
+    
+    plt.xlabel('Zeit [s]', fontsize=12)
+    plt.ylabel('Konzentration [mM]', fontsize=12)
+    plt.title(f'CADET Simulation: {os.path.basename(pkl_file)}', fontsize=14, fontweight='bold')
+    plt.legend(fontsize=10)
+    plt.grid(True, alpha=0.3)
+    plt.yscale('log')
+    
+    # Annotationen für Endwerte
+    for comp_idx in range(min(len(component_names), concentrations.shape[1])):
+        final_conc = concentrations[-1, comp_idx]
+        plt.annotate(f'{final_conc:.3f}', 
+                    (timepoints[-1], final_conc),
+                    textcoords="offset points", 
+                    xytext=(10,0), 
+                    ha='left', fontsize=8,
+                    color=colors[comp_idx])
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"📊 Einzelsimulation gespeichert als: {save_path}")
+    
+    if show_plots:
+        plt.show()
+
+def analyze_simulation_convergence(simulation_dir="Results/Simulations", save_path=None):
+    """
+    Analysiert die Konvergenz der Simulationsergebnisse über Monte Carlo Iterationen
+    
+    Args:
+        simulation_dir: Pfad zum Ordner mit PKL-Dateien
+        save_path: Optional - Pfad zum Speichern der Analyse
+    """
+    
+    import glob
+    
+    pkl_files = glob.glob(os.path.join(simulation_dir, "*.pkl"))
+    pkl_files.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    
+    if len(pkl_files) < 2:
+        print("⚠️ Zu wenige Simulationen für Konvergenzanalyse")
+        return
+    
+    component_names = ['PD', 'NAD', 'Lactol', 'NADH', 'Lacton']
+    final_concentrations = []
+    
+    # Sammle Endkonzentrationen
+    for pkl_file in pkl_files:
+        try:
+            with open(pkl_file, 'rb') as f:
+                model = pickle.load(f)
+            concentrations = model.root.output.solution.unit_001.solution_outlet
+            final_concentrations.append(concentrations[-1, :])
+        except:
+            continue
+    
+    final_conc_array = np.array(final_concentrations)
+    
+    # Plot Konvergenz
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    fig.suptitle('Simulation Konvergenz-Analyse', fontsize=16, fontweight='bold')
+    
+    for comp_idx, ax in enumerate(axes.flat):
+        if comp_idx < len(component_names):
+            values = final_conc_array[:, comp_idx]
+            cumulative_mean = np.cumsum(values) / np.arange(1, len(values) + 1)
+            
+            ax.plot(cumulative_mean, linewidth=2, color=f'C{comp_idx}')
+            ax.axhline(np.mean(values), color='red', linestyle='--', 
+                      label=f'Final Mean: {np.mean(values):.4f}')
+            
+            ax.set_title(f'{component_names[comp_idx]} Konvergenz')
+            ax.set_xlabel('Monte Carlo Iteration')
+            ax.set_ylabel('Kumulative Endkonzentration [mM]')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+        else:
+            ax.set_visible(False)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"📈 Konvergenz-Analyse gespeichert als: {save_path}")
+    
+    plt.show()
+
+def plot_component_analysis(simulation_dir="Results/Simulations", save_path=None, show_plots=True, max_files=None):
+    """
+    Detaillierte Analyse einzelner Komponenten aus CADET Simulationsergebnissen
+    
+    Args:
+        simulation_dir: Pfad zum Ordner mit PKL-Dateien
+        save_path: Optional - Pfad zum Speichern (Standard: Results/component_analysis.png)
+        show_plots: Bool - Ob Plots angezeigt werden sollen
+        max_files: Optional - Maximale Anzahl Dateien
+    """
+    
+    if save_path is None:
+        save_path = os.path.join('Results', 'component_analysis.png')
+    
+    # Lade Simulationsdaten
+    pkl_pattern = os.path.join(simulation_dir, "full_system_simulation_results_*.pkl")
+    pkl_files = glob.glob(pkl_pattern)
+    
+    if not pkl_files:
+        print(f"⚠️ Keine Simulationsdateien gefunden!")
+        return
+    
+    pkl_files.sort(key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    if max_files:
+        pkl_files = pkl_files[:max_files]
+    
+    all_concentrations = []
+    all_timepoints = []
+    
+    for pkl_file in pkl_files:
+        try:
+            with open(pkl_file, 'rb') as f:
+                model = pickle.load(f)
+            concentrations = model.root.output.solution.unit_001.solution_outlet
+            timepoints = model.root.output.solution.solution_times
+            all_concentrations.append(concentrations)
+            all_timepoints.append(timepoints)
+        except:
+            continue
+    
+    if not all_concentrations:
+        print("❌ Keine gültigen Daten!")
+        return
+    
+    component_names = ['PD', 'NAD', 'Lactol', 'NADH', 'Lacton']
+    colors = plt.cm.Set1(np.linspace(0, 1, len(component_names)))
+    
+    # Erstelle Figure mit 5 Komponenten
+    fig, axes = plt.subplots(5, 2, figsize=(16, 20))
+    fig.suptitle('Detaillierte Komponenten-Analyse (Monte Carlo Ensemble)', fontsize=16, fontweight='bold')
+    
+    # Interpoliere auf gemeinsame Zeitachse
+    common_time = all_timepoints[0]
+    interpolated_concentrations = []
+    for concentrations, timepoints in zip(all_concentrations, all_timepoints):
+        interp_conc = np.zeros((len(common_time), concentrations.shape[1]))
+        for comp_idx in range(concentrations.shape[1]):
+            interp_conc[:, comp_idx] = np.interp(common_time, timepoints, concentrations[:, comp_idx])
+        interpolated_concentrations.append(interp_conc)
+    
+    conc_array = np.array(interpolated_concentrations)
+    mean_conc = np.mean(conc_array, axis=0)
+    std_conc = np.std(conc_array, axis=0)
+    
+    for comp_idx in range(min(len(component_names), conc_array.shape[2])):
+        # Linke Spalte: Zeitverlauf
+        ax_time = axes[comp_idx, 0]
+        
+        # Alle Simulationen (dünn)
+        for sim_idx in range(len(all_concentrations)):
+            alpha = 0.05 if len(all_concentrations) > 50 else 0.2
+            ax_time.plot(all_timepoints[sim_idx], all_concentrations[sim_idx][:, comp_idx], 
+                        color=colors[comp_idx], alpha=alpha, linewidth=0.5)
+        
+        # Mittelwert (dick)
+        ax_time.plot(common_time, mean_conc[:, comp_idx], 
+                    color='black', linewidth=3, label=f'Mean')
+        
+        # Konfidenzbereich
+        ax_time.fill_between(common_time, 
+                           mean_conc[:, comp_idx] - std_conc[:, comp_idx],
+                           mean_conc[:, comp_idx] + std_conc[:, comp_idx],
+                           alpha=0.3, color=colors[comp_idx], label='±1σ')
+        
+        ax_time.set_title(f'{component_names[comp_idx]} - Zeitverlauf', fontweight='bold')
+        ax_time.set_xlabel('Zeit [s]')
+        ax_time.set_ylabel('Konzentration [mM]')
+        ax_time.legend()
+        ax_time.grid(True, alpha=0.3)
+        ax_time.set_yscale('log')
+        
+        # Rechte Spalte: Endkonzentrations-Verteilung
+        ax_dist = axes[comp_idx, 1]
+        
+        final_conc = conc_array[:, -1, comp_idx]  # Endkonzentrationen
+        
+        # Histogramm
+        ax_dist.hist(final_conc, bins=20, alpha=0.7, color=colors[comp_idx], edgecolor='black')
+        
+        # Statistiken
+        mean_final = np.mean(final_conc)
+        std_final = np.std(final_conc)
+        median_final = np.median(final_conc)
+        
+        ax_dist.axvline(mean_final, color='red', linestyle='--', linewidth=2, 
+                       label=f'Mean: {mean_final:.4f}')
+        ax_dist.axvline(median_final, color='orange', linestyle=':', linewidth=2, 
+                       label=f'Median: {median_final:.4f}')
+        
+        ax_dist.set_title(f'{component_names[comp_idx]} - Endkonzentrations-Verteilung', fontweight='bold')
+        ax_dist.set_xlabel('Endkonzentration [mM]')
+        ax_dist.set_ylabel('Häufigkeit')
+        ax_dist.legend()
+        ax_dist.grid(True, alpha=0.3)
+        
+        # Statistik-Textbox
+        stats_text = f'Mean: {mean_final:.4f}\nStd: {std_final:.4f}\nCV: {std_final/mean_final*100:.1f}%'
+        ax_dist.text(0.02, 0.98, stats_text, transform=ax_dist.transAxes, 
+                    verticalalignment='top', fontsize=9,
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"📊 Komponenten-Analyse gespeichert als: {save_path}")
+    
+    if show_plots:
+        plt.show()
+    
+    # Konzentrationsstatistiken ausgeben
+    print("\n" + "="*60)
+    print("📊 KOMPONENTEN-STATISTIKEN")
+    print("="*60)
+    for comp_idx in range(min(len(component_names), conc_array.shape[2])):
+        final_conc = conc_array[:, -1, comp_idx]
+        print(f"{component_names[comp_idx]:8s}: {np.mean(final_conc):8.4f} ± {np.std(final_conc):6.4f} mM "
+              f"(CV: {np.std(final_conc)/np.mean(final_conc)*100:.1f}%)")
+
+if __name__ == "__main__":
+
+    plot_component_analysis()# Utility-Funktion für schnelle Plots
