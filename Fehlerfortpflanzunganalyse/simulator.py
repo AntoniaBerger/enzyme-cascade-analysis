@@ -171,9 +171,6 @@ def cadet_simulation_full_system(parameters, sim_time=300.0, cm_iteration = 0):
 
     # Speichere die Ergebnisse in einer Datei
     simulation_dir = "Results/Simulations"  # Konsistent mit Results-Struktur
-    if os.path.exists(simulation_dir):
-        shutil.rmtree(simulation_dir)
-        print(f"🗑️ Simulations-Ordner gelöscht: {simulation_dir}")
     os.makedirs(simulation_dir, exist_ok=True)
     
     # Speichere die Ergebnisse

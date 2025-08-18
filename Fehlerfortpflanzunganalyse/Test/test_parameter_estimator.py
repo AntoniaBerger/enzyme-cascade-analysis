@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from parameter_estimator import (
-    estimate_parameters, fit_parameters, monte_carlo_simulation_r1,
+    estimate_parameters, fit_parameters, monte_carlo_simulation,
     validate_parameters
 )
 
@@ -262,7 +262,7 @@ class TestParameterEstimator(unittest.TestCase):
         noise_level = {'calibration': 0.05, 'reaction': 0.05}
         
         # Test mit wenigen Iterationen
-        results = monte_carlo_simulation_r1(
+        results = monte_carlo_simulation(
             calibration_data, reaction_data, model_info, data_info,
             noise_level, n_iterations=2
         )
@@ -285,7 +285,7 @@ class TestParameterEstimator(unittest.TestCase):
         data_info = {'active_params': {}}
         noise_level = {'calibration': 0.05, 'reaction': 0.05}
         
-        results = monte_carlo_simulation_r1(
+        results = monte_carlo_simulation(
             calibration_data, reaction_data, model_info, data_info,
             noise_level, n_iterations=0
         )

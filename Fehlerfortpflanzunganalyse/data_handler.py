@@ -1,6 +1,7 @@
 import os 
 import pandas as pd
 import numpy as np
+from pyparsing import col
 from scipy.stats import linregress
 
 def is_linear(x, y, threshold=0.77):
@@ -20,83 +21,36 @@ def add_noise_calibration(data, noise_level=0.1):
 
 # working but not optimal better: df version
 def add_noise_reaction(data, noise_level=0.1, verbose=False):
-    """
-    Fügt Rauschen zu Reaktions-CSV-Daten hinzu.
-    Speziell für die Struktur: Header, Units, Well-Daten mit Konzentrationen und Absorptionswerten
     
-    Args:
-        data: pandas DataFrame (CSV-Reaktionsdaten)
-        noise_level: Relative Rauschstärke (0.1 = 10%)
-        verbose: Bool - Debug-Ausgaben
-        
-    Returns:
-        pandas DataFrame mit verrauschten Daten
-    """
-    noisy_data = data.copy()
+    time_points = data.iloc[[0]]
+    data_to_noise = data.iloc[1:].copy()
+    noisy_data = data_to_noise.copy()
     
     try:
-        # Struktur der Reaktions-CSV:
-        # Zeile 0: ["Time [s]", "Concentration", "0", "30", "60", ...]  
-        # Zeile 1: ["", "mM", "0", "30", "60", ...]
-        # Ab Zeile 2: ["Well X", concentration_value, abs_0, abs_30, abs_60, ...]
-        
-        if verbose:
-            print(f"Original DataFrame shape: {data.shape}")
-            print(f"Erste 3 Zeilen:\n{data.iloc[:3, :5]}")
-        
-        # 1. Verrausche Absorptionsdaten (ab Spalte 2, ab Zeile 2)
-        absorption_start_row = 2
-        absorption_start_col = 2
-        
-        if data.shape[0] > absorption_start_row and data.shape[1] > absorption_start_col:
-            absorption_region = data.iloc[absorption_start_row:, absorption_start_col:]
-            
-            for row_idx in range(absorption_region.shape[0]):
-                for col_idx in range(absorption_region.shape[1]):
-                    cell_value = absorption_region.iloc[row_idx, col_idx]
-                    
-                    # Versuche numerische Konvertierung
-                    try:
-                        numeric_value = float(cell_value)
-                        if not np.isnan(numeric_value):
-                            # Addiere relatives Rauschen
-                            noise = np.random.normal(0, abs(numeric_value) * noise_level)
-                            noisy_value = numeric_value + noise
-                            
-                            # Setze zurück ins DataFrame
-                            actual_row = absorption_start_row + row_idx
-                            actual_col = absorption_start_col + col_idx
-                            noisy_data.iloc[actual_row, actual_col] = noisy_value
-                            
-                    except (ValueError, TypeError):
-                        # Nicht-numerische Werte ignorieren
-                        continue
-        
-        # 2. Optional: Auch Konzentrationen verrauschen (Spalte 1, ab Zeile 2)  
-        if data.shape[0] > absorption_start_row:
-            conc_column = data.iloc[absorption_start_row:, 1]  # Spalte 1
-            
-            for row_idx, conc_value in enumerate(conc_column):
-                try:
-                    numeric_conc = float(conc_value)
-                    if not np.isnan(numeric_conc) and numeric_conc > 0:
-                        # Weniger Rauschen für Konzentrationen (meist bekannte Werte)
-                        conc_noise = np.random.normal(0, numeric_conc * noise_level * 0.1)
-                        noisy_conc = max(0, numeric_conc + conc_noise)  # Keine negativen Konzentrationen
-                        
-                        actual_row = absorption_start_row + row_idx
-                        noisy_data.iloc[actual_row, 1] = noisy_conc
-                        
-                except (ValueError, TypeError):
-                    continue
-        
-        if verbose:
-            print(f"Rauschen hinzugefügt mit Level: {noise_level}")
-            
+        concentration_columns = [col for col in data_to_noise.columns if 'Konzentration_mM' in col or 'Konzentration' in col]
+
+        # Identifizieren Sie die Absorptionsspalten (Raw Data (340))
+        absorption_columns = [col for col in data_to_noise.columns if 'Raw Data' in col or '340' in col]
+
+        for col in concentration_columns:
+            mask = noisy_data[col].notna()  # Nur gültige Konzentrationen
+            std_dev = noisy_data[col][mask].std()
+            noise = np.random.normal(0, std_dev * noise_level, size=mask.sum())
+            noisy_data.loc[mask, col] = data_to_noise.loc[mask, col] + noise
+            noisy_data.loc[mask, col] = np.maximum(noisy_data.loc[mask, col], 0)
+
+        for col in absorption_columns:
+            mask = noisy_data[col].notna()  # Nur gültige Absorptionswerte
+            std_dev = noisy_data[col][mask].std()
+            noise = np.random.normal(0, std_dev * noise_level, size=mask.sum())
+            noisy_data.loc[mask, col] = data_to_noise.loc[mask, col] + noise
+            noisy_data.loc[mask, col] = np.maximum(noisy_data.loc[mask, col], 0)
+
     except Exception as e:
         print(f"Fehler beim Hinzufügen von Rauschen: {e}")
         return data  # Original bei Fehler zurückgeben
-        
+    
+    noisy_data = pd.concat([time_points, noisy_data], ignore_index=True)
     return noisy_data
 
 # Füge auch zu data_hadler.py hinzu
@@ -130,7 +84,7 @@ def add_noise_reaction_dict(reaction_data_dict, noise_level=0.1, verbose=False):
 def get_concentrations_from_csv(csv_data):
     """Extrahiert die Konzentrationen aus CSV-Kinetikdaten"""
     # Spalte 2 (Index 1) enthält die Konzentrationen, ab Zeile 3 (Index 2)
-    concentrations_raw = csv_data.iloc[2:, 1].dropna().values
+    concentrations_raw = csv_data.iloc[1:, 1].dropna().values
     concentrations = [float(x) for x in concentrations_raw]
 
     return np.array(concentrations)
@@ -138,7 +92,7 @@ def get_concentrations_from_csv(csv_data):
 def get_absorption_data(csv_data):
     """Extrahiert die Absorptionsdaten aus CSV-Kinetikdaten"""
     # Ab Spalte 3 (Index 2) sind die Absorptionsdaten, ab Zeile 3 (Index 2)
-    absorption_data = csv_data.iloc[2:, 2:].values
+    absorption_data = csv_data.iloc[1:, 2:].values
     absorption_data_clean = []
     
     for row in absorption_data:
@@ -158,8 +112,8 @@ def get_absorption_data(csv_data):
 
 def get_time_points(csv_data):
     """Extrahiert die Zeitpunkte aus CSV-Kinetikdaten"""
-    # Die Zeitpunkte stehen in der ZWEITEN Zeile (Index 1), ab Spalte 3 (Index 2)
-    time_row = csv_data.iloc[1, 2:].values  # Zeile 1 (Time [s]), ab Spalte 2
+    # Die Zeitpunkte stehen in der ERSTEN Zeile (Index 0), ab Spalte 3 (Index 2)
+    time_row = csv_data.iloc[0, 2:].values  # Zeile 1 (Time [s]), ab Spalte 2
     
     # Konvertiere zu numerischen Werten und entferne NaN
     time_points = []

@@ -1,4 +1,5 @@
 import os
+import shutil
 import pandas as pd
 import numpy as np
 from scipy.optimize import curve_fit
@@ -65,7 +66,7 @@ def fit_parameters(substrate_data, activities, model_info, verbose=True):
         result['success'] = False
         return result
 
-def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_info, noise_level, n_iterations=1000):
+def monte_carlo_simulation(calibration_data, reaction_data, model_info, data_info, noise_level, n_iterations=1000):
     """
     Monte Carlo Simulation für Reaktion 1 mit verbesserter Fehlerbehandlung und Statistik.
     
@@ -107,7 +108,6 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
             
             # 2. Verrausche Reaktionsdaten und verarbeite sie
             try:
-                # KORRIGIERT: Verwende data_info direkt (das ist schon reaction_params_dict!)
                 reaction_data_noisy = add_noise_reaction_dict(reaction_data, noise_level=noise_level["reaction"])
                 
                 processed_data_noisy = get_rates_and_concentrations(
@@ -250,7 +250,7 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
     
     # Erstelle Ergebnis-Dictionary
     mc_results = {
-        'n_successful_mc': n_successful,
+        'n_successful': n_successful,
         'n_successful_sim': n_success_sim,
         'n_total': n_iterations,
         'success_rate': n_successful / n_iterations,
@@ -316,22 +316,6 @@ def monte_carlo_simulation_r1(calibration_data, reaction_data, model_info, data_
 
     return mc_results
 
-def validate_parameters(params_dict, r_squared=None):
-    """
-    Validiert Parameter-Dictionary auf Plausibilität.
-    params_dict: Dict mit Parameter-Namen als Keys und Werten
-    r_squared: Optional, R²-Wert für zusätzliche Validierung
-    """
-    for param_name, value in params_dict.items():
-        if not isinstance(value, (int, float)):
-            return False
-        if value <= 0 or value > 10000:
-            return False
-    
-    if r_squared is not None and r_squared < 0.3:
-        return False
-    
-    return True
 
 def estimate_parameters(model_info, data_info, processed_data, verbose=False): 
     """
@@ -435,7 +419,7 @@ if __name__ == "__main__":
             "c_prod": 2.15,
             "c1_const": 300.0,
             "c2_const": 0.6,
-            "c3_const": 100.0
+            "c3_const": 0.0
         },
         "r3": {
             "Vf_well": 10.0,
@@ -464,7 +448,7 @@ if __name__ == "__main__":
     df.to_csv(csv_path, index=True)
     df.to_pickle(pkl_path)
     
-    print(f"💾 Verarbeitete Reaktionsdaten gespeichert:")
+    print(f" Verarbeitete Reaktionsdaten gespeichert:")
     print(f"   CSV: {csv_path}")
     print(f"   PKL: {pkl_path}")
 
@@ -564,13 +548,13 @@ if __name__ == "__main__":
         "reaction": 0.01
     }
 
-    monte_carlo_results = monte_carlo_simulation_r1(
+    monte_carlo_results = monte_carlo_simulation(
         calibration_data,
         full_system_data,
         full_reaction_system_model_info,
         full_system_param,
         noise_level,
-        n_iterations=10
+        n_iterations=500
     )
 
     if monte_carlo_results:
@@ -582,10 +566,12 @@ if __name__ == "__main__":
         
         # Plot Ergebnisse - alle werden automatisch in Results gespeichert
         plot_monte_carlo_results(monte_carlo_results, full_reaction_system_model_info)
-        #create_monte_carlo_report(monte_carlo_results, full_reaction_system_model_info)
+        create_monte_carlo_report(monte_carlo_results, full_reaction_system_model_info)
         
         # Fitting-Qualität und Konvergenz
-        #plot_fitting_quality(monte_carlo_results, full_reaction_system_model_info)
-        #plot_parameter_convergence(monte_carlo_results, full_reaction_system_model_info)
+        plot_fitting_quality(monte_carlo_results, full_reaction_system_model_info)
+        plot_parameter_convergence(monte_carlo_results, full_reaction_system_model_info)
+
+
     else:
         print("\n❌ Monte Carlo Simulation fehlgeschlagen!")
