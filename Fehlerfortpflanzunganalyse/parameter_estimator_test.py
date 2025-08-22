@@ -42,7 +42,7 @@ def fit_parameters(substrate_data, activities, model_info, verbose=True):
     bounds_upper = model_info['bounds_upper']
     
     try:
-        params, covariance = curve_fit(model_info['function'], substrate_data, activities,
+        params, covariance = curve_fit(model_info['function'], substrate_data, activities, 
                                         p0=p0, bounds=(bounds_lower, bounds_upper), maxfev=5000)
         fitted_params = params
         param_errors = np.sqrt(np.diag(covariance))
@@ -93,30 +93,25 @@ def monte_carlo_simulation(calibration_data, reaction_data, model_info, data_inf
     successful_results = []
     simulation_results = []
     failed_counts = {"calibration": 0, "data_processing": 0, "fitting": 0, "validation": 0}
-    
-    # Progress Bar Setup
-    progress_interval = max(1, n_iterations // 20)  # 20 Updates
-
-    # for schleife um verrauschte calibration data
-
     try:
-        calibration_data_noisy = add_noise_calibration(calibration_data, noise_level=noise_level["calibration"])
+        calibration_data_noisy = calibration_data
         calibration_slope_noisy = calculate_calibration(calibration_data_noisy)
     except Exception:
         failed_counts["calibration"] += 1
         
+    # Progress Bar Setup
+    progress_interval = max(1, n_iterations // 20)  # 20 Updates
+    
     for iteration in range(n_iterations):
         try:
-            # 1. Verrausche Kalibrierungsdaten
-
             # 2. Verrausche Reaktionsdaten und verarbeite sie
             try:
-                reaction_data_noisy = add_noise_reaction_dict(reaction_data, noise_level=noise_level["reaction"])
-                
+                reaction_data_noisy = reaction_data
+
                 processed_data_noisy = get_rates_and_concentrations(
                     reaction_data_noisy, 
                     calibration_slope_noisy, 
-                    data_info,
+                    data_info,  # NICHT data_info["active_params"]!
                     verbose=False
                 )
 
@@ -326,7 +321,7 @@ def estimate_parameters(model_info, data_info, processed_data, verbose=False):
     """
     Schätzt die Parameter für ein gegebenes Modell basierend auf verarbeiteten Daten.
     """
-    
+    #todo das generalisieren 
     if verbose:
         print(f"DataFrame Info:")
         print(f"Shape: {processed_data.shape}")
@@ -366,6 +361,10 @@ def estimate_parameters(model_info, data_info, processed_data, verbose=False):
         return {'success': False, 'error': f'Datenextraktion fehlgeschlagen: {e}'}
     
     # Fitting durchführen
+    # verrausche Daten
+
+    activities = activities + np.random.normal(0, 0.01, size=activities.shape)
+    
     result = fit_parameters(concentration_values, activities, model_info, verbose=verbose)
     
     return result

@@ -501,20 +501,7 @@ def create_monte_carlo_report(monte_carlo_results, model_info, save_path=None):
     
     # Stelle sicher, dass das Results-Verzeichnis existiert
     os.makedirs(save_path, exist_ok=True)
-    
-    # Erstelle alle Plots mit spezifischen Namen
-    print("📊 Erstelle Monte Carlo Plots...")
-    plot_monte_carlo_results(monte_carlo_results, model_info, 
-                           os.path.join(save_path, 'monte_carlo_results.png'), show_plots=False)
-    
-    print("📈 Erstelle Konvergenz-Plots...")
-    plot_parameter_convergence(monte_carlo_results, model_info, 
-                             os.path.join(save_path, 'parameter_convergence.png'), show_plots=False)
-    
-    print("📊 Erstelle Fitting-Qualität Plots...")
-    plot_fitting_quality(monte_carlo_results, 
-                        save_path=os.path.join(save_path, 'fitting_quality.png'), show_plots=False)
-    
+        
     # Text-Bericht erstellen
     timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
     report_file = os.path.join(save_path, f"monte_carlo_report_{timestamp}.txt")
@@ -544,12 +531,20 @@ def create_monte_carlo_report(monte_carlo_results, model_info, save_path=None):
                 if f'{name}_mean' in monte_carlo_results:
                     mean = monte_carlo_results[f'{name}_mean']
                     std = monte_carlo_results[f'{name}_std']
+                    median = monte_carlo_results.get(f'{name}_median', None)
+                    ci_lower = monte_carlo_results.get(f'{name}_ci_lower', None)
+                    ci_upper = monte_carlo_results.get(f'{name}_ci_upper', None)
                     values = monte_carlo_results[f'{name}_values']
                     min_val = np.min(values)
                     max_val = np.max(values)
-                    
                     f.write(f"{name:12s}: {mean:8.4f} ± {std:6.4f} {unit:4s} "
                            f"[{min_val:8.4f}, {max_val:8.4f}]\n")
+                    if median is not None:
+                        f.write(f"    Median: {median:8.4f} {unit}\n")
+                    if ci_lower is not None and ci_upper is not None:
+                        f.write(f"    95% CI: [{ci_lower:8.4f}, {ci_upper:8.4f}] {unit}\n")
+                # Statistische Kennzahlen für Parameter
+                
             
             # R² Statistiken
             if 'R_squared_mean' in monte_carlo_results:
@@ -557,6 +552,7 @@ def create_monte_carlo_report(monte_carlo_results, model_info, save_path=None):
                 f.write("-" * 30 + "\n")
                 f.write(f"R² Mittelwert: {monte_carlo_results['R_squared_mean']:.6f}\n")
                 f.write(f"R² Standardabweichung: {monte_carlo_results['R_squared_std']:.6f}\n")
+                f.write(f"R² Median: {monte_carlo_results.get('R_squared_median', float('nan')):.6f}\n")
                 f.write(f"R² Minimum: {np.min(monte_carlo_results['R_squared_values']):.6f}\n")
                 f.write(f"R² Maximum: {np.max(monte_carlo_results['R_squared_values']):.6f}\n")
             
@@ -566,6 +562,44 @@ def create_monte_carlo_report(monte_carlo_results, model_info, save_path=None):
                 f.write("-" * 30 + "\n")
                 for category, count in monte_carlo_results['failed_counts'].items():
                     f.write(f"{category:20s}: {count:6d} ({count/monte_carlo_results['n_total']*100:.2f}%)\n")
+            
+            report_lines = []
+            report_lines.append('=== PARAMETER-STATISTIKEN ===')
+            for param_name in param_names:
+                mean_val = monte_carlo_results.get(f'{param_name}_mean', None)
+                std_val = monte_carlo_results.get(f'{param_name}_std', None)
+                median_val = monte_carlo_results.get(f'{param_name}_median', None)
+                ci_lower = monte_carlo_results.get(f'{param_name}_ci_lower', None)
+                ci_upper = monte_carlo_results.get(f'{param_name}_ci_upper', None)
+                unit = model_info.get('param_units', [''])[param_names.index(param_name)] if param_name in param_names else ''
+                if mean_val is not None:
+                    report_lines.append(f"{param_name}: {mean_val:.4f} ± {std_val:.4f} {unit}")
+                    report_lines.append(f"  Median: {median_val:.4f} {unit}")
+                    report_lines.append(f"  95% CI: [{ci_lower:.4f}, {ci_upper:.4f}] {unit}")
+
+            # R² Statistiken
+            r2_mean = monte_carlo_results.get('R_squared_mean', None)
+            r2_std = monte_carlo_results.get('R_squared_std', None)
+            r2_median = monte_carlo_results.get('R_squared_median', None)
+            if r2_mean is not None:
+                report_lines.append(f"\nR²: {r2_mean:.4f} ± {r2_std:.4f}")
+                report_lines.append(f"R² Median: {r2_median:.4f}")
+
+            # Korrelationsmatrix
+            correlation_matrix = monte_carlo_results.get('correlation_matrix', None)
+            if correlation_matrix is not None:
+                report_lines.append('\n=== PARAMETER-KORRELATIONEN ===')
+                for i, name1 in enumerate(param_names):
+                    for j, name2 in enumerate(param_names):
+                        if i < j:
+                            corr = correlation_matrix[i, j]
+                            report_lines.append(f"{name1} ↔ {name2}: {corr:.3f}")
+
+            # Schreibe Report in Datei (report_file) und gebe ihn ggf. auf der Konsole aus
+            for line in report_lines:
+                f.write(line + '\n')
+            for line in report_lines:
+                print(line)
     
     print(f"📄 Bericht gespeichert als: {report_file}")
     print("✅ Monte Carlo Analyse abgeschlossen!")
@@ -1047,6 +1081,8 @@ def plot_component_analysis(simulation_dir="Results/Simulations", save_path=None
         final_conc = conc_array[:, -1, comp_idx]
         print(f"{component_names[comp_idx]:8s}: {np.mean(final_conc):8.4f} ± {np.std(final_conc):6.4f} mM "
               f"(CV: {np.std(final_conc)/np.mean(final_conc)*100:.1f}%)")
+
+
 
 if __name__ == "__main__":
 

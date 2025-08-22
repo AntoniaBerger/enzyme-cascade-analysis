@@ -218,7 +218,7 @@ def calculate_activity(concentrations, absorption_data, time_points, slope_cal, 
             slope, intercept_test, r_value_test, p_value_test, std_err_test = linregress(time_final, abs_final)
             r_squared = r_value_test**2
             
-            if verbose and r_squared < 0.70:
+            if verbose and r_squared < 0.50:
                 print(f"Well {i+1} (Konz: {conc_float} mM): R² = {r_squared:.3f} - nicht linear genug")
                 continue
             elif not is_linear(time_final, abs_final):
@@ -227,12 +227,11 @@ def calculate_activity(concentrations, absorption_data, time_points, slope_cal, 
                 continue
                         
             # Umrechnung nach Ihrer Formel: A[U/mg] = (m1 * 60 * Vf_well * Vf_prod) / (m2 * c_prod)
-            Vf_well = activ_param["Vf_well"]          # Verdünnung im Well
+            Vf_well = activ_param["Vf_well"]          # Verdünnung im Well (20μL + 180μL assay )
             Vf_prod = activ_param["Vf_prod"]          # Verdünnung der Proteinlösung
-            c_prod = activ_param["c_prod"]            # Proteinkonzentration [mg/L]
-            
-            # m1 = slope [A340/s], m2 = slope_cal [A340/μM]
-            activity_U_per_mg = (abs(slope) * 60 * Vf_well * Vf_prod) / (slope_cal * c_prod)
+            c_prod = activ_param["c_prod"]            # Gemessene Proteinkonzentration [mg/L]
+
+            activity_U_per_mg = (abs(slope) * 60 * Vf_well * Vf_prod) / (slope_cal * c_prod) #! Formel prüfen
             
             # Aktivität in U/mg
             activity_U = activity_U_per_mg  # Hier als U/mg belassen
@@ -265,7 +264,7 @@ def calculate_activity(concentrations, absorption_data, time_points, slope_cal, 
 
     return  initial_rates , valid_concentrations
 
-def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict, verbose=True):
+def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict, verbose=False):
 
 
     processed_data_dict = {
@@ -338,7 +337,11 @@ def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict
             processed_data_dict = None
 
     df = pd.DataFrame(processed_data_dict)
-    df.to_csv("processed_reaction_data.csv", index=False)
+
+    if verbose:
+        print("Anzahl der Datenpunkte pro Reaction")
+        print(df["reaction"].value_counts())
+
     return df
 
 def create_reaction_rates_dict(processed_data):

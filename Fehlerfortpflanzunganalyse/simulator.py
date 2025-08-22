@@ -101,7 +101,7 @@ def add_reaction_system(model, parameters):
         [
             [0.0, 0.0, 0.0, 0.0, 0.0],   # PD
             [0.0, 0.0, 0.0, 0.0, 0.0],   # NAD
-            [Ki_PD, 0.0, 0.0, 0.0, 0.0],  # LTOL
+            [0, 0.0, 0.0, 0.0, 0.0],  # LTOL
             [0.0, 0, 0.0, 0.0, 0.0], # NADH
             [0.0, 0.0, 0.0, 0.0, 0.0]    # LTOL
         ],
@@ -168,7 +168,11 @@ def cadet_simulation_full_system(parameters, sim_time=300.0, cm_iteration = 0):
     model_do.save()
     data_mm = model_do.run()
     model_do.load()
-
+    
+    if (data_mm.return_code != 0):
+        print(f"⚠️ Simulation {cm_iteration} fehlgeschlagen mit Rückgabecode: {data_mm.return_code}")
+        return data_mm.return_code
+    
     # Speichere die Ergebnisse in einer Datei
     simulation_dir = "Results/Simulations"  # Konsistent mit Results-Struktur
     os.makedirs(simulation_dir, exist_ok=True)
@@ -194,4 +198,5 @@ def cadet_simulation_full_system(parameters, sim_time=300.0, cm_iteration = 0):
     except:
         pass  # Ignoriere Aufräum-Fehler
 
+    
     return data_mm.return_code

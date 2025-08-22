@@ -5,8 +5,6 @@ import numpy as np
 from scipy.optimize import curve_fit
 import pickle
 
-import random
-
 from data_handler import  add_noise_reaction_dict, calculate_calibration, add_noise_calibration, create_concentrations_dict, create_reaction_rates_dict, get_rates_and_concentrations , make_fitting_data
 from parameter_estimator import estimate_parameters, monte_carlo_simulation
 
@@ -36,31 +34,16 @@ r3_lactol = pd.read_csv(os.path.join(r3_path, 'r_3_Lactol_NAD_5mM.csv'))
 r3_nad = pd.read_csv(os.path.join(r3_path, 'r_3_NAD_Lactol_500mM.csv'))
 
 
-full_system_data = {
-    "r1": {
-        "c1": r1_nad_data,
-        "c2": r1_pd_data
-    },
+reaction_two_data = {
     "r2": {
         "c1": r2_hp_data,
         "c2": r2_nadh_data,
         "c3": r2_pd_data
-    },
-    "r3": {
-        "c1": r3_lactol,
-        "c2": r3_nad
     }
 }
 
 
-full_system_param = {
-    "r1": {
-        "Vf_well": 10.0,
-        "Vf_prod": 1.0,
-        "c_prod": 2.2108,
-        "c1_const": 5.0,
-        "c2_const": 500.0
-    },
+reaction_two_param = {
     "r2": {
         "Vf_well": 10.0,
         "Vf_prod": 5.0,
@@ -69,29 +52,22 @@ full_system_param = {
         "c2_const": 0.6,
         "c3_const": 0.0
     },
-    "r3": {
-        "Vf_well": 10.0,
-        "Vf_prod": 10.0,
-        "c_prod": 2.15,
-        "c1_const": 500.0,
-        "c2_const": 5.0
-    },
     "x_dimension": 3,
     "y_dimension": 1
 }
 
 df = get_rates_and_concentrations(
-    full_system_data,
+    reaction_two_data,
     calibration_slope,
-    full_system_param
+    reaction_two_param
 )
 
 # Stelle sicher, dass das Results-Verzeichnis existiert
 os.makedirs('Results', exist_ok=True)
 
 # Speichere im Results-Ordner
-csv_path = os.path.join('Results', "full_system_processed_reaction_data.csv")
-pkl_path = os.path.join('Results', "full_system_processed_reaction_data.pkl")
+csv_path = os.path.join('Results', "reaction_two_processed_reaction_data.csv")
+pkl_path = os.path.join('Results', "reaction_two_processed_reaction_data.pkl")
 
 df.to_csv(csv_path, index=True)
 df.to_pickle(pkl_path)
@@ -100,15 +76,13 @@ print(f" Verarbeitete Reaktionsdaten gespeichert:")
 print(f"   CSV: {csv_path}")
 print(f"   PKL: {pkl_path}")
 
-def full_reaction_system(concentration_data, Vmax1, Vmax2, Vmax3, KmPD, KmNAD, KmLactol, KmNADH, KiPD):
+def reaction_two_system(concentration_data, Vmax2, KmLactol, KmNADH, KiPD):
     """
     Wrapper für curve_fit Kompatibilität - nimmt flache Parameter entgegen
     Berechnet die Enzymaktivität für das vollständige Drei-Reaktions-System
     
     ALLE DREI REAKTIONEN:
-    - Reaktion 1: PD + NAD → Pyruvat + NADH
     - Reaktion 2: Lactol + NADH → ... (mit PD/NAD Inhibition)
-    - Reaktion 3: Lactol + NAD → ... (mit Lactol Inhibition)
     """
     # Entpacke Substratkonzentrationen, Inhibitor-Konzentrationen und Reaktions-IDs
     S1, S2, Inhibitor, reaction_ids = concentration_data
@@ -116,79 +90,54 @@ def full_reaction_system(concentration_data, Vmax1, Vmax2, Vmax3, KmPD, KmNAD, K
     # Initialisiere Ergebnis-Array
     V_obs = np.zeros_like(S1, dtype=float)
     
-    # Reaktion 1: PD + NAD → HD + NADH
-    reaction_1_mask = (reaction_ids == 1)
-    if np.any(reaction_1_mask):
-        # S1 = NAD oder konstante NAD, S2 = PD oder konstante PD
-        S1_r1 = S1[reaction_1_mask] # NAD
-        S2_r1 = S2[reaction_1_mask] # PD
-        
-        V_obs[reaction_1_mask] = (Vmax1 * S1_r1 * S2_r1) / (
-            (KmPD + S2_r1) *  (KmNAD + S1_r1)
-        )
-    
     # Reaktion 2: Lactol + NADH → ... (mit PD Inhibition)
     reaction_2_mask = (reaction_ids == 2)
     if np.any(reaction_2_mask):
         S1_r2 = S1[reaction_2_mask]  # Lactol
-        S2_r2 = S2[reaction_2_mask]  # NADH
-        PD_inhibitor = Inhibitor[reaction_2_mask]  # Variable PD-Konzentration als Inhibitor
+        S2_r2 = S2[reaction_2_mask]* 1000  # NADH
+        PD_inhibitor = Inhibitor[reaction_2_mask]   # Variable PD-Konzentration als Inhibitor
         V_obs[reaction_2_mask] = (Vmax2 * S1_r2 * S2_r2) / (
-            (KmLactol *(1 + PD_inhibitor / KiPD)  + S1_r2) * (KmNADH  + S2_r2)
-        )
-    # Reaktion 3: Lactol + NAD 
-    reaction_3_mask = (reaction_ids == 3)
-    if np.any(reaction_3_mask):
-        S1_r3 = S1[reaction_3_mask]  # Lactol
-        S2_r3 = S2[reaction_3_mask]  # NAD
-        V_obs[reaction_3_mask] = (Vmax3 * S1_r3 * S2_r3) / (
-            (KmLactol  + S1_r3) * (KmNAD + S2_r3)
+            (KmLactol  + S1_r2) * (KmNADH  + S2_r2)
         )
     
     return V_obs
 
 
-full_reaction_system_model_info = {
-    "name": "full_reaction_system",
-    "function": full_reaction_system,
+reaction_two_system_model_info = {
+    "name": "reaction_two_system",
+    "function": reaction_two_system,
     "param_names": [
-        "Vmax1", "Vmax2", "Vmax3",
-        "KmPD", "KmNAD", "KmLactol", "KmNADH",
+        "Vmax2",
+        "KmLactol", "KmNADH",
         "KiPD"
     ],
     "param_units": [
-        "U", "U", "U",
-        "mM", "mM", "mM", "mM",
+        "U",
+        "mM", "mM",
         "mM"
     ],
     "substrate_keys": ["S1", "S2", "Inhibitor", "reaction_ids"],
     "initial_guess_func": lambda activities, substrate_data: [
-        max(activities) if len(activities) > 0 else 1.0,  # Vmax1
         max(activities) if len(activities) > 0 else 1.0,  # Vmax2
-        max(activities) if len(activities) > 0 else 1.0,  # Vmax3
-        84.0,  # KmPD
-        2.2,  # KmNAD
         75.0,  # KmLactol
         2.0,  # KmNADH
         90.0  # KiPD
     ],
-    "bounds_lower": [0]*8,
-    "bounds_upper": [np.inf]*8,
+    "bounds_lower": [0]*4,
+    "bounds_upper": [np.inf]*4,
     "description": "Komplettes Drei-Reaktions-System mit Inhibitionen"
 }
 
-full_system_parameters = estimate_parameters(full_reaction_system_model_info, full_system_param,df)
-
-
+reaction_two_parameters = estimate_parameters(reaction_two_system_model_info, reaction_two_param, df)
 
 print("\n=== Parameter Schätzung für das vollständige System ==="
-        f"\nModell: {full_reaction_system_model_info['description']}"
-        f"\nErgebnis: {full_system_parameters}"
-        f"\nR²: {full_system_parameters['r_squared']:.4f}")
-for i, param_name in enumerate(full_reaction_system_model_info['param_names']):
-    param_val = full_system_parameters['params'][i]
-    param_err = full_system_parameters['param_errors'][i]
-    unit = full_reaction_system_model_info['param_units'][i]
+        f"\nModell: {reaction_two_system_model_info['description']}"
+        f"\nErgebnis: {reaction_two_parameters}"
+        f"\nR²: {reaction_two_parameters['r_squared']:.4f}")
+for i, param_name in enumerate(reaction_two_system_model_info['param_names']):
+    param_val = reaction_two_parameters['params'][i]
+    param_err = reaction_two_parameters['param_errors'][i]
+    unit = reaction_two_system_model_info['param_units'][i]
     print(f"{param_name}: {param_val:.4f} ± {param_err:.4f} {unit}")
 
 # todo add new level reaction_ad and reaction_co
@@ -204,11 +153,11 @@ if os.path.exists(simulation_dir):
 
 monte_carlo_results = monte_carlo_simulation(
     calibration_data,
-    full_system_data,
-    full_reaction_system_model_info,
-    full_system_param,
+    reaction_two_data,
+    reaction_two_system_model_info,
+    reaction_two_param,
     noise_level,
-    n_iterations=100
+    n_iterations=50
 )
 
 if monte_carlo_results:
@@ -220,10 +169,13 @@ if monte_carlo_results:
     
     # Plot Ergebnisse - alle werden automatisch in Results gespeichert
     #plot_monte_carlo_results(monte_carlo_results, full_reaction_system_model_info)
-    create_monte_carlo_report(monte_carlo_results, full_reaction_system_model_info)
-    
+    create_monte_carlo_report(monte_carlo_results, reaction_two_system_model_info)
+
     # Fitting-Qualität und Konvergenz
-    plot_monte_carlo_results(monte_carlo_results, full_reaction_system_model_info)
+    plot_fitting_quality(monte_carlo_results, reaction_two_system_model_info,show_plots=False)
+    plot_parameter_convergence(monte_carlo_results, reaction_two_system_model_info)
+
+    plot_component_analysis()
 
 else:
     print("\n❌ Monte Carlo Simulation fehlgeschlagen!")
