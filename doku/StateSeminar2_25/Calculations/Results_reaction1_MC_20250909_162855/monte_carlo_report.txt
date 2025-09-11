@@ -1,0 +1,63 @@
+================================================================================
+MONTE CARLO SIMULATION BERICHT
+================================================================================
+
+Modell: Komplettes Drei-Reaktions-System mit Inhibitionen
+Datum: 2025-09-09 16:29:13
+
+SIMULATIONSSTATISTIKEN:
+------------------------------
+Gesamte Iterationen: 1000
+Erfolgreiche Iterationen: 1000
+Erfolgsrate: 100.00%
+
+EINGABEPARAMETER:
+------------------------------
+Number of Iterations: N/A
+Noise Level: {'calibration': 0.0, 'reaction': 0.01, 'concentration': 0.0}
+Noise Model: plate_reader
+Noise Level (Concentration): N/A
+PARAMETER-ERGEBNISSE:
+------------------------------
+Vmax1       :   0.0765 ± 0.0002 U    [  0.0758,   0.0770]
+    Median:   0.0765 U
+    95% CI: [  0.0761,   0.0768] U
+KmPD        :  95.7828 ± 0.2413 mM   [ 95.0393,  96.4732]
+    Median:  95.7822 mM
+    95% CI: [ 95.3120,  96.2443] mM
+KmNAD       :   1.9269 ± 0.0154 mM   [  1.8787,   1.9715]
+    Median:   1.9268 mM
+    95% CI: [  1.8961,   1.9577] mM
+
+R² STATISTIKEN:
+------------------------------
+R² Mittelwert: 0.945923
+R² Standardabweichung: 0.000529
+R² Median: 0.945931
+R² Minimum: 0.944118
+R² Maximum: 0.947577
+
+FEHLSCHLAG-ANALYSE:
+------------------------------
+calibration         :      0 (0.00%)
+data_processing     :      0 (0.00%)
+fitting             :      0 (0.00%)
+validation          :      0 (0.00%)
+=== PARAMETER-STATISTIKEN ===
+Vmax1: 0.0765 ± 0.0002 U
+  Median: 0.0765 U
+  95% CI: [0.0761, 0.0768] U
+KmPD: 95.7828 ± 0.2413 mM
+  Median: 95.7822 mM
+  95% CI: [95.3120, 96.2443] mM
+KmNAD: 1.9269 ± 0.0154 mM
+  Median: 1.9268 mM
+  95% CI: [1.8961, 1.9577] mM
+
+R²: 0.9459 ± 0.0005
+R² Median: 0.9459
+
+=== PARAMETER-KORRELATIONEN ===
+Vmax1 ↔ KmPD: 0.446
+Vmax1 ↔ KmNAD: 0.932
+KmPD ↔ KmNAD: 0.136

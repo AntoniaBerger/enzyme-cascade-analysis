@@ -1,0 +1,63 @@
+================================================================================
+MONTE CARLO SIMULATION BERICHT
+================================================================================
+
+Modell: Komplettes Drei-Reaktions-System mit Inhibitionen
+Datum: 2025-09-09 16:55:06
+
+SIMULATIONSSTATISTIKEN:
+------------------------------
+Gesamte Iterationen: 1000
+Erfolgreiche Iterationen: 1000
+Erfolgsrate: 100.00%
+
+EINGABEPARAMETER:
+------------------------------
+Number of Iterations: N/A
+Noise Level: {'calibration': 0.0, 'reaction': 0.01, 'concentration': 0.0}
+Noise Model: processed_data
+Noise Level (Concentration): N/A
+PARAMETER-ERGEBNISSE:
+------------------------------
+Vmax2       :   2.8753 ± 0.0095 U    [  2.8453,   2.9033]
+    Median:   2.8753 U
+    95% CI: [  2.8567,   2.8940] U
+KmLactol    :  65.4097 ± 0.2951 mM   [ 64.2271,  66.6411]
+    Median:  65.4066 mM
+    95% CI: [ 64.8266,  65.9758] mM
+KmNADH      :   3.0885 ± 0.0240 mM   [  3.0081,   3.1625]
+    Median:   3.0882 mM
+    95% CI: [  3.0426,   3.1358] mM
+
+R² STATISTIKEN:
+------------------------------
+R² Mittelwert: 0.967366
+R² Standardabweichung: 0.000594
+R² Median: 0.967390
+R² Minimum: 0.965250
+R² Maximum: 0.969346
+
+FEHLSCHLAG-ANALYSE:
+------------------------------
+calibration         :      0 (0.00%)
+data_processing     :      0 (0.00%)
+fitting             :      0 (0.00%)
+validation          :      0 (0.00%)
+=== PARAMETER-STATISTIKEN ===
+Vmax2: 2.8753 ± 0.0095 U
+  Median: 2.8753 U
+  95% CI: [2.8567, 2.8940] U
+KmLactol: 65.4097 ± 0.2951 mM
+  Median: 65.4066 mM
+  95% CI: [64.8266, 65.9758] mM
+KmNADH: 3.0885 ± 0.0240 mM
+  Median: 3.0882 mM
+  95% CI: [3.0426, 3.1358] mM
+
+R²: 0.9674 ± 0.0006
+R² Median: 0.9674
+
+=== PARAMETER-KORRELATIONEN ===
+Vmax2 ↔ KmLactol: 0.355
+Vmax2 ↔ KmNADH: 0.957
+KmLactol ↔ KmNADH: 0.127

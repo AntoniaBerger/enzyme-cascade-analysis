@@ -1,0 +1,460 @@
+\documentclass[aspectratio=169]{beamer}
+% Optional: Set a theme
+\usetheme{Madrid}
+\usecolortheme{seahorse}
+\usepackage{graphicx} % Um Bilder einzufügen
+\usepackage{subcaption}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+% Paket für Zeichnungen
+\usepackage{tikz}
+\usetikzlibrary{arrows, positioning}
+\usepackage{xcolor}
+\usepackage{fontawesome}
+\usepackage[version=4]{mhchem}
+\usepackage{chemfig}
+\usepackage{subcaption}
+% Optional: Set some colors
+
+
+\title{State Seminar 2025 II}
+\author{Antonia Berger \& Jannis Bergmann}
+\date{\today}
+
+\begin{document}
+\begin{frame}
+    \maketitle
+\end{frame}
+\begin{frame}{Overview}
+     \tableofcontents
+\end{frame}
+\begin{frame}{Previously on "State Seminar 2025" }
+    \textbf{AUFBRUCH:}
+        \only<1>{\begin{figure}
+            \centering
+            \includegraphics[width=0.7\linewidth]{stateSeminar2_25/figure/Aufbruch_Zusammenfassung.png}
+            \label{fig:enter-label}
+        \end{figure}}
+        \only<2>{\begin{figure}
+            \centering
+            \includegraphics[width=0.7\linewidth]{figure/Aufbruch_Realität.png}
+            \label{fig:enter-label}
+        \end{figure}}\pause
+    \textbf{Enzyme cascade:}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.7\linewidth]{figure/Reaktions_kaskade.png}
+            \label{fig:enter-label}
+        \end{figure}
+\end{frame}
+\section{Parameter Estimation}
+\begin{frame}{How good are my parameters?}
+    \begin{block}{Given}
+    \begin{itemize}
+        \item Chemical drawing of enzyme cascade
+        \item Model equations
+        \item Estimated parameters and standard deviation
+        \item Experimental data
+    \end{itemize}
+    \end{block}
+    \begin{block}{Question}
+        How "good" are these estimated parameters?
+    \end{block}
+\end{frame}
+\begin{frame}{Estimate Parameters from Kinetic Data}
+\begin{minipage}{0.45\textwidth}
+    \begin{figure}
+        \centering
+        \includegraphics[width=1.0\linewidth]{figure/curve_fit.png}
+        \label{fig:enter-label}
+    \end{figure}
+\end{minipage}
+\hspace{1cm}
+\begin{minipage}{0.45\textwidth}
+\centering
+  \begin{block}{Fitting parameters}
+        Assumption:
+       \begin{equation*}
+           y_i = f(x_i,\theta)
+       \end{equation*}
+       Find $ \theta$ such that 
+       \begin{equation*}
+           \min_{\theta} \sum_i (f(x_i,\theta) - y_i)^2
+       \end{equation*}
+   \end{block}
+\end{minipage}
+\end{frame}
+\begin{frame}{Michaelis-Menten Kinetics}
+    \begin{block}{Enzyme-Substrate Reaction Mechanism}
+    \begin{center}
+        \ce{$S$ + $E$ <=>[$k_1$] $ES$ ->[$k_2$] $E$ + $P$}.
+    \end{center}
+    \end{block}
+    \begin{minipage}{0.45\textwidth}
+        \begin{block}{Assumptions}
+            \begin{itemize}
+                \item Steady-state approximation: $\frac{d[\text{ES}]}{dt} = 0$
+            \end{itemize}
+        \end{block}
+        \hspace{5cm}
+    \end{minipage}
+    \hspace{1cm}
+    \begin{minipage}{0.45\textwidth}
+    \centering
+        \begin{block}{Michaelis-Menten Equation}
+            \begin{equation*}
+                r = \frac{V_{\text{max}} \cdot [\text{S}]}{K_m + [\text{S}]}
+            \end{equation*}
+        \end{block}
+        \begin{figure}
+            \centering
+        \includegraphics[width=0.7\linewidth]{stateSeminar2_25/figure/simple_michaelis_menten.png}
+        \label{fig:enter-label}
+        \end{figure}
+    \end{minipage}
+\end{frame}
+\begin{frame}{Estimate Parameters from Kinetic Data}
+\begin{minipage}{0.45\textwidth}
+    \begin{figure}
+        \centering
+        \includegraphics[width=1.0\linewidth]{figure/curve_fit.png}
+        \label{fig:enter-label}
+    \end{figure}
+\end{minipage}
+\hspace{1cm}
+\begin{minipage}{0.45\textwidth}
+\centering
+     \begin{block}{Fitting parameters}
+        Assumption:
+       \begin{equation*}
+           y_i = f(x_i,\theta) + \varepsilon_i \text{ with } \varepsilon_i \sim N(0,\sigma_i^2).
+       \end{equation*}
+       Find $ \theta$ such that 
+       \begin{equation*}
+           \min_{\theta} \sum_i ((f(x_i,\theta) - y_i)/ \sigma_i)^2
+       \end{equation*}
+   \end{block}
+\end{minipage}
+\begin{block}{Problem}
+    \begin{itemize}
+        \item We can not assume that the errors $\varepsilon_i$ are normally distributed.
+        \item $y_i - f(x_i,\theta)$ is not the direct measurement error since $y_i$ is determined in an experimental workflow.
+    \end{itemize}
+\end{block}
+\end{frame}
+\begin{frame}{Calculating reaction rates from plate reader data}
+    \only<1>{\begin{figure}
+        \centering
+        \includegraphics[width=0.7\linewidth]{figure/PR_workflow.jpeg}
+        \label{fig:enter-label}
+    \end{figure}}
+    \only<2>{\begin{figure}
+        \centering
+        \includegraphics[width=0.7\linewidth]{figure/PR_workflow_with_error.jpeg}
+        \label{fig:enter-label}
+    \end{figure}}\pause
+\begin{block}{Approach}
+    Implement parameter estimation script that accounts for different types of error sources
+\end{block}
+\end{frame}
+\begin{frame}{Monte Carlo Bootstrap}
+    \begin{block}{Source of error}
+        \begin{itemize}
+            \item Calibration errors $\rightarrow$ errors in calculating reaction rates
+            \item Pipetting errors $\rightarrow$ concentration errors $c_i = c_{true} + \epsilon c_i$
+            \item \textbf{Measurement errors} in plate reader $\rightarrow$ fluorescence errors $o_i = o_{true} + \epsilon o_i$
+        \end{itemize}
+    \end{block}
+    \begin{block}{Monte Carlo Bootstrap Algorithm}
+        \begin{enumerate}
+            \item For $i = 1, \ldots, N$ bootstrap samples:
+            \begin{enumerate}
+                \item Sample errors: $\epsilon_{o_k} \sim N(0,\sigma_{o_k}^2)$
+                \item Calculate perturbed values:  $o_k^{(i)} = o_k + \epsilon_{o_k}$
+                \item Compute reaction rates with perturbed data
+                \item Fit parameters $\theta^{(i)}$ to perturbed data
+            \end{enumerate}
+            \item Get parameter distribution from $\{\theta^{(1)}, \ldots, \theta^{(N)}\}$
+            \item Calculate confidence intervals and parameter uncertainties, and correlations
+        \end{enumerate}
+    \end{block}
+\end{frame}
+\begin{frame}{Results for reaction 1 with noisy Plate Reader data}
+\begin{minipage}{0.45\textwidth}
+    \centering
+    \begin{equation*}
+    r_{1} = \frac{V_{\text{max,1}} \cdot [\text{NAD}] \cdot [\text{PD}]}{(K_{m,\text{PD}}+ [\text{PD}]) \cdot (K_{m,\text{NAD}} + [\text{NAD}])}
+\end{equation*}
+    {\small
+    \begin{tabular}{|c|c|c|}
+        \hline
+        Parameter & Value ± $\sigma$  \\
+        \hline
+        $V_{\text{max,1}}$ & 0.0765 ± 0.0002\\
+        $K_{m,\text{PD}}$ & 95.78 ± 0.24 \\
+        $K_{m,\text{NAD}}$ & 1.927 ± 0.015 \\
+        \hline
+    \end{tabular}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}{0.45\textwidth}
+\centering
+   \begin{figure}
+        \centering
+        \includegraphics[width=0.9\linewidth]{figure/corner_plot_reaction_1_plate_reader.png}
+        \label{fig:enter-label}
+    \end{figure}
+\end{minipage}
+\end{frame}
+\begin{frame}{Results for reaction 1 with noisy processed Data}
+
+\begin{minipage}{0.45\textwidth}
+\begin{equation*}
+     r_{1} = \frac{V_{\text{max,1}} \cdot [\text{NAD}] \cdot [\text{PD}]}{(K_{m,\text{PD}}+ [\text{PD}]) \cdot (K_{m,\text{NAD}} + [\text{NAD}])}
+\end{equation*}
+\vspace{2cm}
+    {\small
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        Parameter & Value ± $\sigma$ \\
+        \hline
+        $V_{\text{max,1}}$ & 0.0764 ± 0.0002   \\
+        $K_{m,\text{PD}}$ & 95.7672 ± 0.4926   \\
+        $K_{m,\text{NAD}}$ & 1.9265 ± 0.0150  \\
+        \hline
+    \end{tabular}}
+\end{minipage}
+\hspace{0.5}
+\begin{minipage}{0.45\textwidth}
+\centering
+   \begin{figure}
+        \centering
+        \includegraphics[width=0.9\linewidth]{figure/corner_plot_reaction_1_procced_data.png}
+        \label{fig:enter-label}
+    \end{figure}
+\end{minipage}
+\end{frame}
+\begin{frame}{Results for reaction 2 with noisy Plate Reader data}
+\begin{equation*}
+    r_{2} = \frac{V_{\text{max,2}} \cdot [\text{Lactol}] \cdot [\text{NADH}]}{\left(K_{m,\text{Lactol}} \left(1 + \frac{[\text{PD}]}{K_{i,\text{PD}}}\right) + [\text{Lactol}]\right) \cdot (K_{m,\text{NADH}} + [\text{NADH}])}
+\end{equation*}
+\begin{minipage}{0.45\textwidth}
+\centering
+    {\small
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        Parameter & Value ± $\sigma$  \\
+        \hline
+        $V_{\text{max,2}}$ & 11.57 ± 3.32  \\
+        $K_{m,\text{Lactol}}$ & 105.6 ± 4.04  \\
+        $K_{m,\text{NADH}}$ & 11.60 ± 3.50  \\
+        $K_{i,\text{PD}}$ & 138.85 ± 4.06 \\
+        \hline
+    \end{tabular}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}{0.45\textwidth}
+\centering
+\begin{center}
+   \begin{figure}
+        \centering
+        \includegraphics[width=0.9\linewidth]{figure/corner_plot_reaction2_plate_reader.png}
+        \label{fig:enter-label}
+    \end{figure}
+\end{center}
+\end{minipage}
+\end{frame}
+\begin{frame}{Results for reaction 2 with noisy processed Data}
+\begin{equation*}
+    r_{2} = \frac{V_{\text{max,2}} \cdot [\text{Lactol}] \cdot [\text{NADH}]}{\left(K_{m,\text{Lactol}} \left(1 + \frac{[\text{PD}]}{K_{i,\text{PD}}}\right) + [\text{Lactol}]\right) \cdot (K_{m,\text{NADH}} + [\text{NADH}])}
+\end{equation*}
+\begin{minipage}{0.45\textwidth}
+\centering
+        {\small\begin{tabular}{|c|c|c|c|}
+        \hline
+        Parameter & Value ± $\sigma$ \\
+        \hline
+        $V_{\text{max,2}}$ & 11.15 ± 0.88 \\
+        $K_{m,\text{Lactol}}$ & 107.14 ± 0.87 \\
+        $K_{m,\text{NADH}}$ & 11.10 ± 0.92 \\
+        $K_{i,\text{PD}}$ & 140.45 ± 0.97  \\
+        \hline
+    \end{tabular}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}{0.45\textwidth}
+\centering
+   \begin{figure}
+        \right
+        \includegraphics[width=0.9\linewidth]{figure/corner_plot_reaction2_processed_data.png}
+        \label{fig:enter-label}
+    \end{figure}
+\end{minipage}
+\end{frame}
+\begin{frame}{Results for reaction 3 with noisy Plate Reader data}
+\begin{minipage}{0.45\textwidth}
+\begin{equation*}
+    r_{3} &= \frac{V_{\text{max,3}} \cdot [\text{Lactol}] \cdot [\text{NAD}]}{(K_{m,\text{Lactol}} + [\text{Lactol}]) \cdot (K_{m,\text{NAD}} + [\text{NAD}])}
+\end{equation*}
+\centering
+   {\small \begin{tabular}{|c|c|c|c|}
+        \hline
+        Parameter & Value ± $\sigma^2$  \\
+        \hline
+        $V_{\text{max,3}}$ &  2.8755 ± 0.0059 \\
+        $K_{m,\text{Lactol}}$ & 65.4094 ± 0.1227 \\
+        $K_{m,\text{NAD}}$ & 3.0888 ± 0.0157 \\
+        \hline
+    \end{tabular}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}{0.45\textwidth}
+\centering
+   \begin{figure}
+        \centering
+        \includegraphics[width=0.9\linewidth]{figure/corner_plot_reaction3_plate_reader.png}
+        \label{fig:enter-label}
+    \end{figure}
+\end{minipage}
+\end{frame}
+\begin{frame}{Results for reaction 3 with noisy processed data}
+\begin{minipage}{0.45\textwidth}
+\begin{equation*}
+   r_{3} &= \frac{V_{\text{max,3}} \cdot [\text{Lactol}] \cdot [\text{NAD}]}{(K_{m,\text{Lactol}} + [\text{Lactol}]) \cdot (K_{m,\text{NAD}} + [\text{NAD}])}
+\end{equation*}
+        {\small\begin{tabular}{|c|c|c|c|}
+        \hline
+        Parameter & Value ± $\sigma$  \\
+        \hline
+        $V_{\text{max,3}}$ & 2.8753 ± 0.0095\\
+        $K_{m,\text{Lactol}}$ & 65.4097 ± 0.29514 \\
+        $K_{m,\text{NAD}}$ & 3.0885 ± 0.0240 \\
+        \hline
+    \end{tabular}}
+\end{minipage}
+\hspace{0.5cm}
+\begin{minipage}{0.45\textwidth}
+   \begin{figure}
+        \centering
+        \includegraphics[width=0.9\linewidth]{figure/corner_plot_reaction3_processed_data.png}
+        \label{fig:enter-label}
+    \end{figure}
+\end{minipage}
+\end{frame}
+\begin{frame}{Summary and Outlook}    
+    \begin{block}{Key Findings}
+        \begin{itemize}
+            \item Reaction 1: Very low uncertainties
+            \item Reaction 2: Higher uncertainties, especially for $V_{\text{max,2}}$ and $K_{m,\text{NADH}}$ 
+            \item Reaction 3: Mixed results - $K_{m,\text{NADH}}$ shows high uncertainty 
+            \item Correlation results vary depending on the error source (plate reader vs processed data)
+        \end{itemize}
+    \end{block}
+    
+    \begin{block}{Outlook}
+        \begin{itemize}
+            \item Investigate \textbf{experimental design optimization} to reduce parameter correlations
+            \item Optimize \textbf{uncertainty quantification pipeline}
+            \item Simulate \textbf{cascade simulation with additional reactions} with CADET
+            \item Keep learning 
+        \end{itemize}
+    \end{block}
+\end{frame}
+\section{PioReactor feat. Jannis Bergmann}
+\begin{frame}{Part II}
+   \tableofcontents
+\end{frame}
+\begin{frame}{Motivation}
+    \begin{minipage}{0.45\textwidth}
+    \begin{itemize}
+        \item Extending CADET
+        \begin{itemize}
+            \item Simulates biotechnical processes
+            \item Runs simulations "offline"
+        \end{itemize}
+        \item Development of a Digital Twin
+    \end{itemize}
+    \end{minipage}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.75\linewidth]{stateSeminar2_25/figure/cadet_offline.png}
+            \label{fig:enter-label}
+        \end{figure}
+    \end{minipage}
+
+\end{frame}
+
+\begin{frame}{CADET-Live*}
+\begin{minipage}{0.45\textwidth}
+    \begin{itemize}
+        \item New module to extend CADET's features
+        \item Running CADET during bio-processes
+        \item Change process environment based on simulations
+    \end{itemize}
+\end{minipage}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.75\linewidth]{stateSeminar2_25/figure/cadet_online.png}
+            \label{fig:enter-label}
+        \end{figure}
+    \end{minipage}
+\end{frame}
+
+\begin{frame}{CADET-Live* (Features)}
+    \begin{itemize}
+        \item Written in C/C++
+        \item Interfaces with CADET-Core
+        \item Build Modular e.g. different methods of data input
+        \item Efficient
+        \item Open Source
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{Proof-of-concept with Pioreactor}
+    \begin{column}{0.48\textwidth}
+        \begin{itemize}
+            \item Open Source mini bio-reactor
+            \item Based on RaspberryPi
+            \item Can be used standalone or in cluster
+            \item Uses MQTT for communication
+        \end{itemize}
+    \end{column}
+    \begin{column}{0.48\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[height=0.7\textheight]{stateSeminar2_25//figure/pioreactor-40ml.jpg}
+            \caption{Pioreactor 40ml}
+            \label{fig:pioreactor-40ml}
+        \end{figure}
+    \end{column}
+\end{frame}
+
+\begin{frame}{Current State}
+    \begin{itemize}
+        \item Pioreactor build
+        \item Software setup completed
+        \item Self-tests run successfully
+        \item Getting familiar with software for CADET-Core and PioReactor
+    \end{itemize}
+\end{frame}
+
+\begin{frame}{The End -  Thank you for your attention!}
+\begin{block}{Summary}
+    \begin{itemize}
+        \item Parameter estimation and error propagation
+        \begin{itemize}
+            \item Example of estimating kinetic parameters from experimental data
+            \item Where and how you assume measurement error matters.
+        \end{itemize}
+        \item PioReactor
+        \begin{itemize}
+            \item Small bio process which is easy to control
+            \item Staring point to get familiar with feedback systems
+        \end{itemize}
+    \end{itemize}
+\end{block}
+\end{frame}
+
+\end{document}

@@ -5,7 +5,7 @@ from pyparsing import col
 from scipy.stats import linregress
 
 def is_linear(x, y, threshold=0.77):
-    """Prüft ob Daten linear sind basierend auf R² (gelockerte Kriterien für mehr Datenpunkte)"""
+    """Prüft ob Daten linear sind basierend auf R (gelockerte Kriterien für mehr Datenpunkte)"""
     if len(x) < 3 or len(y) < 3:
         return False
     try:
@@ -14,14 +14,32 @@ def is_linear(x, y, threshold=0.77):
     except Exception:
         return False
 
-def add_noise_calibration(data, noise_level=0.1):
-    noisy_data = data.copy()
-    noise = np.random.normal(0, noise_level, size=data.shape)
-    return noisy_data + noise
-
-# working but not optimal better: df version
-def add_noise_reaction(data, noise_level=0.1, verbose=False):
+# bisher ohne concentrations noise
+def add_noise_calibration(data, noise_level=0.1, conc_noise_level=0.0):
     
+    conc_data = data["concentration"].copy()
+    std_dev_conc = conc_data.std()
+    conc_data += np.random.normal(0, std_dev_conc * conc_noise_level, size=conc_data.shape)
+
+    RD_1_noisy = data["RD_1"].copy()
+    std_dev_1 = RD_1_noisy.std()
+    RD_1_noisy += np.random.normal(0, std_dev_1 * noise_level, size=RD_1_noisy.shape)
+    
+    RD_2_noisy = data["RD_2"].copy()
+    std_dev_2 = RD_2_noisy.std()
+    RD_2_noisy += np.random.normal(0, std_dev_2 * noise_level, size=RD_2_noisy.shape)
+
+    noisy_data = pd.DataFrame({
+        "concentration": conc_data,
+        "RD_1": RD_1_noisy,
+        "RD_2": RD_2_noisy
+    })
+
+    return noisy_data
+
+def add_noise_substrate(data, noise_level=0.1, verbose=False):
+    
+    # extrahiere time which should remain unchanged
     time_points = data.iloc[[0]]
     data_to_noise = data.iloc[1:].copy()
     noisy_data = data_to_noise.copy()
@@ -35,36 +53,92 @@ def add_noise_reaction(data, noise_level=0.1, verbose=False):
         for col in concentration_columns:
             mask = noisy_data[col].notna()  # Nur gültige Konzentrationen
             std_dev = noisy_data[col][mask].std()
-            noise = np.random.normal(0, std_dev * noise_level, size=mask.sum())
+            noise = np.random.normal(0, std_dev * 0.0, size=mask.sum())
             noisy_data.loc[mask, col] = data_to_noise.loc[mask, col] + noise
-            noisy_data.loc[mask, col] = np.maximum(noisy_data.loc[mask, col], 0)
 
         for col in absorption_columns:
             mask = noisy_data[col].notna()  # Nur gültige Absorptionswerte
             std_dev = noisy_data[col][mask].std()
             noise = np.random.normal(0, std_dev * noise_level, size=mask.sum())
             noisy_data.loc[mask, col] = data_to_noise.loc[mask, col] + noise
-            noisy_data.loc[mask, col] = np.maximum(noisy_data.loc[mask, col], 0)
 
     except Exception as e:
         print(f"Fehler beim Hinzufügen von Rauschen: {e}")
-        return data  # Original bei Fehler zurückgeben
+        return data
     
     noisy_data = pd.concat([time_points, noisy_data], ignore_index=True)
     return noisy_data
 
-# Füge auch zu data_hadler.py hinzu
-def add_noise_reaction_dict(reaction_data_dict, noise_level=0.1, verbose=False):
+def add_noise_concentrations(data, noise_level=0.1, verbose=False):
     """
-    Fügt Rauschen zu einem Dictionary von Reaktionsdaten hinzu.
+    Fügt Rauschen zu Konzentrationen in Plate Reader Daten hinzu.
+    Sucht nach Spalten mit 'Konzentration_mM' oder 'Concentration' im Namen.
     
     Args:
-        reaction_data_dict: Dict mit {reaction_name: DataFrame}
-        noise_level: Rauschstärke
-        verbose: Debug-Ausgaben
-        
+        data: DataFrame mit Plate Reader Daten
+        noise_level: Stärke des Rauschens (Standard: 0.1 = 10%)
+        verbose: Debug-Ausgabe
+    
     Returns:
-        Dict mit verrauschten DataFrames
+        DataFrame mit verrauschten Konzentrationen
+    """
+    if noise_level == 0.0:
+        return data
+        
+    noisy_data = data.copy()
+    
+    try:
+        # Identifiziere Konzentrationsspalten
+        concentration_columns = [col for col in data.columns if 'Konzentration_mM' in str(col) or 'Concentration' in str(col)]
+        
+        if verbose and concentration_columns:
+            print(f"Gefundene Konzentrationsspalten: {concentration_columns}")
+        
+        for col in concentration_columns:
+            if col in noisy_data.columns:
+                # Nur numerische, gültige Konzentrationen verrauschen
+                mask = noisy_data[col].notna()
+                
+                # Versuche die Werte zu numerischen Werten zu konvertieren
+                numeric_values = pd.to_numeric(noisy_data[col], errors='coerce')
+                numeric_mask = mask & numeric_values.notna() & (numeric_values > 0)
+                
+                if numeric_mask.sum() > 0:
+                    valid_values = numeric_values[numeric_mask]
+                    std_dev = valid_values.std()
+                    
+                    if std_dev > 0:
+                        noise = np.random.normal(0, std_dev * noise_level, size=numeric_mask.sum())
+                        noisy_values = valid_values + noise
+                        
+                        # Stelle sicher, dass Konzentrationen nicht negativ werden
+                        noisy_values = np.maximum(noisy_values, 0.001)  # Mindestkonzentration
+                        
+                        noisy_data.loc[numeric_mask, col] = noisy_values
+                        
+                        if verbose:
+                            print(f"Rauschen zu Spalte '{col}' hinzugefügt: {numeric_mask.sum()} Werte verändert")
+                
+    except Exception as e:
+        if verbose:
+            print(f"Fehler beim Hinzufügen von Konzentrations-Rauschen: {e}")
+        return data
+    
+    return noisy_data
+    
+
+def add_noise_plate_reader_data(reaction_data_dict, noise_level=0.1, noise_level_conc=0.0, verbose=False):
+    """
+    Fügt Rauschen zu Plate Reader Daten hinzu.
+    
+    Args:
+        reaction_data_dict: Dictionary mit Reaktionsdaten
+        noise_level: Rauschen für Absorptionsdaten (Standard: 0.1 = 10%)
+        noise_level_conc: Rauschen für Konzentrationen (Standard: 0.0 = kein Rauschen)
+        verbose: Debug-Ausgabe
+    
+    Returns:
+        Dictionary mit verrauschten Daten
     """
     noisy_dict = {}
     
@@ -75,11 +149,64 @@ def add_noise_reaction_dict(reaction_data_dict, noise_level=0.1, verbose=False):
         for component in dataframe:
             if verbose:
                 print(f"  Komponente: {component}")
-            reaction_dict[component] = add_noise_reaction(dataframe[component], noise_level, verbose=False)
+            # Erst Absorptionsdaten verrauschen
+            noisy_component = add_noise_substrate(dataframe[component], noise_level, verbose=False)
+            # Dann Konzentrationen verrauschen
+            if noise_level_conc > 0:
+                noisy_component = add_noise_concentrations(noisy_component, noise_level_conc, verbose=verbose)
+            reaction_dict[component] = noisy_component
         noisy_dict[reaction_name] = reaction_dict
 
     return noisy_dict
 
+def add_noise_processed_data(df, noise_level=0.1, noise_level_conc=0.0, verbose=False):
+    """
+    Fügt Rauschen zu verarbeiteten Daten hinzu.
+    
+    Args:
+        df: DataFrame mit verarbeiteten Daten
+        noise_level: Rauschen für Raten (Standard: 0.1 = 10%)
+        noise_level_conc: Rauschen für Konzentrationen (Standard: 0.0 = kein Rauschen)
+        verbose: Debug-Ausgabe
+    
+    Returns:
+        DataFrame mit verrauschten Daten
+    """
+    noisy_df = df.copy()
+    try:
+        # Rauschen zu Konzentrationen hinzufügen (falls gewünscht)
+        if noise_level_conc > 0:
+            concentration_columns = [col for col in df.columns if col.startswith('c')]
+            for col in concentration_columns:
+                mask = noisy_df[col].notna()  # Nur gültige Konzentrationen
+                if mask.sum() > 0:
+                    std_dev = noisy_df[col][mask].std()
+                    if std_dev > 0:
+                        noise = np.random.normal(0, std_dev * noise_level_conc, size=mask.sum())
+                        noisy_values = noisy_df.loc[mask, col] + noise
+                        # Stelle sicher, dass Konzentrationen nicht negativ werden
+                        noisy_values = np.maximum(noisy_values, 0.001)
+                        noisy_df.loc[mask, col] = noisy_values
+                        if verbose:
+                            print(f"Rauschen zu Konzentrationsspalte '{col}' hinzugefügt")
+
+        # Rauschen zu Raten hinzufügen
+        if 'rates' in df.columns:
+            mask = noisy_df['rates'].notna()  # Nur gültige Raten
+            if mask.sum() > 0:
+                std_dev = noisy_df['rates'][mask].std()
+                if std_dev > 0:
+                    noise = np.random.normal(0, std_dev * noise_level, size=mask.sum())
+                    noisy_df.loc[mask, 'rates'] = df.loc[mask, 'rates'] + noise
+                    if verbose:
+                        print(f"Rauschen zu Ratenspalte hinzugefügt")
+
+    except Exception as e:
+        if verbose:
+            print(f"Fehler beim Hinzufügen von Rauschen zu verarbeiteten Daten: {e}")
+        return df
+
+    return noisy_df
 
 def get_concentrations_from_csv(csv_data):
     """Extrahiert die Konzentrationen aus CSV-Kinetikdaten"""
@@ -128,7 +255,7 @@ def get_time_points(csv_data):
     
     return np.array(time_points)
 
-def calculate_calibration(data, verbose=False):
+def calc_calibration_slope(data, verbose=False):
     """
     Berechnet die Kalibrierung basierend auf NADH-Konzentrationen und Extinktionen.
     Unterstützt sowohl pandas DataFrames als auch experiment_data-Dicts.
@@ -157,7 +284,7 @@ def calculate_calibration(data, verbose=False):
     
     return slope_cal
 
-def calculate_activity(concentrations, absorption_data, time_points, slope_cal, activ_param, verbose=True):
+def get_rate_conc(concentrations, absorption_data, time_points, slope_cal, activ_param, verbose=True):
     """
     Berechnet Aktivitäten und gibt sie als experiment_data-Dict zurück.
     Kompatibel mit der neuen modularen Datenstruktur.
@@ -264,8 +391,7 @@ def calculate_activity(concentrations, absorption_data, time_points, slope_cal, 
 
     return  initial_rates , valid_concentrations
 
-def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict, verbose=False):
-
+def compute_processed_data(reaction_data_dict, slope, reaction_params_dict, noise_level_conc = 0.0, verbose=False):
 
     processed_data_dict = {
         "reaction" : [],
@@ -297,7 +423,7 @@ def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict
                 time_points = get_time_points(experimental_data)
 
                 # Berechne Aktivitäten
-                result = calculate_activity(
+                result = get_rate_conc(
                     concentrations, absorption_data, time_points, 
                     slope, params_dict, verbose=verbose
                 )
@@ -320,6 +446,11 @@ def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict
                             # falls der eintrag existiert: 
                             if f'c{j+1}_const' in reaction_params_dict[reaction_name]:
                                 constant_value = [reaction_params_dict[reaction_name][f'c{j+1}_const']] * number_of_valid_concentrations
+                                if noise_level_conc > 0.0:
+                                    const_value = reaction_params_dict[reaction_name][f'c{j+1}_const']
+                                    std_dev_const = const_value * noise_level_conc
+                                    noisy_constants = np.random.normal(const_value, std_dev_const, size=number_of_valid_concentrations)
+                                    noisy_constants = np.maximum(noisy_constants, 0.000)
                                 processed_data_dict[f'c{j+1}'].extend(constant_value)
                             else: 
                                 processed_data_dict[f'c{j+1}'].extend([0.0] * number_of_valid_concentrations)
@@ -343,58 +474,3 @@ def get_rates_and_concentrations(reaction_data_dict, slope, reaction_params_dict
         print(df["reaction"].value_counts())
 
     return df
-
-def create_reaction_rates_dict(processed_data):
-    """
-    Erstellt ein rates_dict aus verarbeiteten Reaktionsdaten.
-    
-    Args:
-        processed_data: Rückgabe von get_rates_and_concentrations
-        
-    Returns:
-        Dict: {reaction_name + "_rates": activities}
-    """
-    rates_dict = {}
-    activities = processed_data.get("activities", {})
-    
-    for reaction_name, activity_data in activities.items():
-        rates_dict[f"{reaction_name}_rates"] = activity_data
-    
-    return rates_dict
-
-def create_concentrations_dict(processed_data, constants_dict=None):
-    """
-    Erstellt ein concentrations_dict aus verarbeiteten Reaktionsdaten.
-    
-    Args:
-        processed_data: Rückgabe von get_rates_and_concentrations
-        constants_dict: Dict mit konstanten Konzentrationen {key: value}
-        
-    Returns:
-        Dict: {reaction_name + "_conc": concentrations, ...constants}
-    """
-    concentrations_dict = {}
-    concentrations = processed_data.get("concentrations", {})
-    
-    # Füge variable Konzentrationen hinzu
-    for reaction_name, conc_data in concentrations.items():
-        concentrations_dict[f"{reaction_name}_conc"] = conc_data
-    
-    # Füge konstante Konzentrationen hinzu
-    if constants_dict:
-        concentrations_dict.update(constants_dict)
-    
-    return concentrations_dict
-
-
-def make_fitting_data(model_info, data_info, df, verbose=True):
-    """ 
-    Extrahiere aus dataframe die x und y Werte für das Fitting.
-    """
-    dim_x = data_info["x_dimension"]
-    dim_y = data_info["y_dimension"]
-
-    data_x = []
-    data_y = []
-
-    a = df.apply(lambda row: (row["reaction"],row["c1"],row["c2"],row["c3"]), axis=1).to_numpy()

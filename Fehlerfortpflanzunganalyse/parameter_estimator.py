@@ -6,14 +6,60 @@ import numpy as np
 from scipy.optimize import curve_fit
 import pickle
 from simulator import cadet_simulation_full_system
-from data_handler import  add_noise_reaction_dict, calculate_calibration, add_noise_calibration, create_concentrations_dict, create_reaction_rates_dict, get_rates_and_concentrations , make_fitting_data
+from data_handler import  add_noise_plate_reader_data, add_noise_processed_data, calc_calibration_slope, add_noise_calibration, compute_processed_data
 
 from plotter import plot_monte_carlo_results, create_monte_carlo_report, plot_fitting_quality, plot_parameter_convergence
 
 
-# Setze Funktions-Referenzen in AVAILABLE_MODELS
+def estimate_parameters(model_info, data_info, processed_data, sigma = 1.0 , verbose=False): 
+    """
+    Schätzt die Parameter für ein gegebenes Modell basierend auf verarbeiteten Daten.
+    """
+    
+    if verbose:
+        print(f"DataFrame Info:")
+        print(f"Shape: {processed_data.shape}")
+        print(f"Columns: {list(processed_data.columns)}")
+        print(f"Erste 3 Zeilen:")
+        print(processed_data.head(3))
+    
+    try:
+        # Extrahiere Daten als separate Arrays
+        reaction_ids = processed_data['reaction'].values
+        c1_values = processed_data['c1'].values if 'c1' in processed_data.columns else np.zeros(len(processed_data))
+        c2_values = processed_data['c2'].values if 'c2' in processed_data.columns else np.zeros(len(processed_data))
+        c3_values = processed_data['c3'].values if 'c3' in processed_data.columns else np.zeros(len(processed_data))
+        
+        # Activities als flaches Array
+        activities = processed_data['rates'].values
+        
+        if verbose:
+            print(f"Extrahierte Arrays:")
+            print(f"  reaction_ids: {reaction_ids[:3]}... (shape: {reaction_ids.shape})")
+            print(f"  c1_values: {c1_values[:3]}... (shape: {c1_values.shape})")  
+            print(f"  c2_values: {c2_values[:3]}... (shape: {c2_values.shape})")
+            print(f"  c3_values: {c3_values[:3]}... (shape: {c3_values.shape})")
+            print(f"  activities: {activities[:3]}... (shape: {activities.shape})")
+        
+        # Erstelle concentration_data für curve_fit (4 separate Arrays!)
+        # Achtung: Reihenfolge muss zu deiner full_reaction_system Funktion passen!
+        concentration_values = [c1_values, c2_values, c3_values, reaction_ids]  # S1, S2, Inhibitor, reaction_ids
 
-def fit_parameters(substrate_data, activities, model_info, verbose=True):
+        if verbose:
+            print(f"concentration_values shapes: {[arr.shape for arr in concentration_values]}")
+            print(f"activities shape: {activities.shape}")
+        
+    except Exception as e:
+        if verbose:
+            print(f"Fehler beim Extrahieren der Daten: {e}")
+        return {'success': False, 'error': f'Datenextraktion fehlgeschlagen: {e}'}
+    
+    # Fitting durchführen
+    result = fit_parameters(concentration_values, activities, model_info, sigma=sigma, verbose=verbose)
+
+    return result
+
+def fit_parameters(substrate_data, activities, model_info, sigma = 1.0, verbose=True):
     """
     Allgemeine Fitting-Funktion mit modularer Datenstruktur.
     """
@@ -43,7 +89,7 @@ def fit_parameters(substrate_data, activities, model_info, verbose=True):
     
     try:
         params, covariance = curve_fit(model_info['function'], substrate_data, activities,
-                                        p0=p0, bounds=(bounds_lower, bounds_upper), maxfev=5000)
+                                        p0=p0, sigma=sigma, bounds=(bounds_lower, bounds_upper), maxfev=5000)
         fitted_params = params
         param_errors = np.sqrt(np.diag(covariance))
             
@@ -54,10 +100,24 @@ def fit_parameters(substrate_data, activities, model_info, verbose=True):
         ss_tot = np.sum((activities - np.mean(activities)) ** 2)
         r_squared = 1 - (ss_res / ss_tot)
 
+        # correlation matrix
+        if covariance is not None and np.all(np.isfinite(covariance)):
+            correlation_matrix = np.zeros_like(covariance)
+            for i in range(len(fitted_params)):
+                for j in range(len(fitted_params)):
+                    if param_errors[i] > 0 and param_errors[j] > 0:
+                        correlation_matrix[i, j] = covariance[i, j] / (param_errors[i] * param_errors[j])
+                    else:
+                        correlation_matrix[i, j] = 0.0
+            result['correlation_matrix'] = correlation_matrix
+        else:
+            result['correlation_matrix'] = None
+
         result['success'] = True
         result['params'] = fitted_params
         result['param_errors'] = param_errors
         result['r_squared'] = r_squared
+        result['covariance'] = covariance
 
         return result
         
@@ -67,7 +127,7 @@ def fit_parameters(substrate_data, activities, model_info, verbose=True):
         result['success'] = False
         return result
 
-def monte_carlo_simulation(calibration_data, reaction_data, model_info, data_info, noise_level, n_iterations=1000, verbose = False):
+def monte_carlo_simulation(calibration_data, reaction_data, model_info, data_info, noise_level, noise_model = "plate_reader", n_iterations=1000, verbose = False):
     """
     Monte Carlo Simulation für Reaktion 1 mit verbesserter Fehlerbehandlung und Statistik.
     
@@ -86,8 +146,10 @@ def monte_carlo_simulation(calibration_data, reaction_data, model_info, data_inf
     print(f"{'='*60}")
     print(f"Modell: {model_info['description']}")
     print(f"Iterationen: {n_iterations}")
+    print(f"Rauschmodell: {noise_model}")
     print(f"Kalibrierungs-Rauschen: {noise_level['calibration']*100:.1f}%")
     print(f"Reaktions-Rauschen: {noise_level['reaction']*100:.1f}%")
+    print(f"Concentrations-Rauschen: {noise_level['concentration']*100:.1f}%")
     print(f"{'='*60}")
     
     successful_results = []
@@ -101,7 +163,7 @@ def monte_carlo_simulation(calibration_data, reaction_data, model_info, data_inf
 
     try:
         calibration_data_noisy = add_noise_calibration(calibration_data, noise_level=noise_level["calibration"])
-        calibration_slope_noisy = calculate_calibration(calibration_data_noisy)
+        calibration_slope_noisy = calc_calibration_slope(calibration_data_noisy)
     except Exception:
         failed_counts["calibration"] += 1
         
@@ -111,14 +173,22 @@ def monte_carlo_simulation(calibration_data, reaction_data, model_info, data_inf
 
             # 2. Verrausche Reaktionsdaten und verarbeite sie
             try:
-                reaction_data_noisy = add_noise_reaction_dict(reaction_data, noise_level=noise_level["reaction"])
-                
-                processed_data_noisy = get_rates_and_concentrations(
+                if noise_model == "plate_reader":
+                    reaction_data_noisy = add_noise_plate_reader_data(reaction_data, noise_level=noise_level["reaction"], noise_level_conc=noise_level.get("concentration", 0.0))
+                else:
+                    reaction_data_noisy = reaction_data
+
+                processed_data_noisy = compute_processed_data(
                     reaction_data_noisy, 
                     calibration_slope_noisy, 
                     data_info,
+                    noise_level_conc = noise_level.get("concentration", 0.0),
                     verbose=False
                 )
+
+
+                if noise_model == "processed_data":
+                    processed_data_noisy = add_noise_processed_data(processed_data_noisy, noise_level=noise_level["reaction"], noise_level_conc=noise_level.get("concentration", 0.0))
 
                 # Prüfe ob DataFrame zurückgegeben wurde
                 if processed_data_noisy is None or len(processed_data_noisy) == 0:
@@ -126,7 +196,7 @@ def monte_carlo_simulation(calibration_data, reaction_data, model_info, data_inf
                     continue
                     
             except Exception as e:
-                print(f"Debug: Data processing error: {e}")  # Für Debug
+                print(f"Debug: Data processing error: {e}")
                 failed_counts["data_processing"] += 1
                 continue
             
@@ -253,6 +323,10 @@ def monte_carlo_simulation(calibration_data, reaction_data, model_info, data_inf
     
     # Erstelle Ergebnis-Dictionary
     mc_results = {
+        'noise_level': noise_level,
+        'noise_model': noise_model,
+
+
         'n_successful': n_successful,
         'n_successful_sim': n_success_sim,
         'n_total': n_iterations,
@@ -322,61 +396,13 @@ def monte_carlo_simulation(calibration_data, reaction_data, model_info, data_inf
     return mc_results
 
 
-def estimate_parameters(model_info, data_info, processed_data, verbose=False): 
-    """
-    Schätzt die Parameter für ein gegebenes Modell basierend auf verarbeiteten Daten.
-    """
-    
-    if verbose:
-        print(f"DataFrame Info:")
-        print(f"Shape: {processed_data.shape}")
-        print(f"Columns: {list(processed_data.columns)}")
-        print(f"Erste 3 Zeilen:")
-        print(processed_data.head(3))
-    
-    try:
-        # Extrahiere Daten als separate Arrays (NICHT als Liste von Listen!)
-        reaction_ids = processed_data['reaction'].values
-        c1_values = processed_data['c1'].values if 'c1' in processed_data.columns else np.zeros(len(processed_data))
-        c2_values = processed_data['c2'].values if 'c2' in processed_data.columns else np.zeros(len(processed_data))
-        c3_values = processed_data['c3'].values if 'c3' in processed_data.columns else np.zeros(len(processed_data))
-        
-        # Activities als flaches Array
-        activities = processed_data['rates'].values
-        
-        if verbose:
-            print(f"Extrahierte Arrays:")
-            print(f"  reaction_ids: {reaction_ids[:3]}... (shape: {reaction_ids.shape})")
-            print(f"  c1_values: {c1_values[:3]}... (shape: {c1_values.shape})")  
-            print(f"  c2_values: {c2_values[:3]}... (shape: {c2_values.shape})")
-            print(f"  c3_values: {c3_values[:3]}... (shape: {c3_values.shape})")
-            print(f"  activities: {activities[:3]}... (shape: {activities.shape})")
-        
-        # Erstelle concentration_data für curve_fit (4 separate Arrays!)
-        # Achtung: Reihenfolge muss zu deiner full_reaction_system Funktion passen!
-        concentration_values = [c1_values, c2_values, c3_values, reaction_ids]  # S1, S2, Inhibitor, reaction_ids
-
-        if verbose:
-            print(f"concentration_values shapes: {[arr.shape for arr in concentration_values]}")
-            print(f"activities shape: {activities.shape}")
-        
-    except Exception as e:
-        if verbose:
-            print(f"Fehler beim Extrahieren der Daten: {e}")
-        return {'success': False, 'error': f'Datenextraktion fehlgeschlagen: {e}'}
-    
-    # Fitting durchführen
-    result = fit_parameters(concentration_values, activities, model_info, verbose=verbose)
-    
-    return result
-
 if __name__ == "__main__":
 
     
     BASE_PATH = r"C:\Users\berger\Documents\Projekts\enzyme-cascade-analysis\Fehlerfortpflanzunganalyse"
     
     calibration_data = pd.read_csv(os.path.join(BASE_PATH, 'Data', 'NADH_Kalibriergerade.csv'))
-    calibration_slope = calculate_calibration(calibration_data)
+    calibration_slope = calc_calibration_slope(calibration_data)
 
     r1_path = os.path.join(BASE_PATH, 'Data', 'Reaction1')
     r1_nad_data = pd.read_csv(os.path.join(r1_path, 'r_1_NAD_PD_500mM.csv'), header=None)
@@ -437,7 +463,7 @@ if __name__ == "__main__":
         "y_dimension": 1
     }
 
-    df = get_rates_and_concentrations(
+    df = compute_processed_data(
         full_system_data,
         calibration_slope,
         full_system_param

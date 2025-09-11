@@ -51,33 +51,50 @@ def plot_monte_carlo_results_from_file(pkl_file_path, save_path=None, show_plots
     except Exception as e:
         print(f"❌ Fehler beim Laden der PKL-Datei {pkl_file_path}: {e}")
 
-def plot_monte_carlo_results(monte_carlo_results_or_file, model_info=None, save_path=None, show_plots=True):
+def plot_monte_carlo_results(monte_carlo_results_or_file, model_info=None, save_path=None, show_plots=True, timestamp=None):
     """
     Erstellt umfassende Plots für Monte Carlo Simulationsergebnisse
     
     Args:
         monte_carlo_results_or_file: Dict mit Monte Carlo Ergebnissen ODER Pfad zur PKL-Datei
         model_info: Dict mit Modellinformationen (nur nötig wenn erste Argument Dict ist)
-        save_path: Optional - Pfad zum Speichern der Plots
+        save_path: Optional - Pfad zum Speichern der Plots (Standard: Results/MC_YYYYMMDD_HHMMSS/)
         show_plots: Bool - Ob Plots angezeigt werden sollen
+        timestamp: Optional - Zeitstempel für konsistente Ordnernamen (wird automatisch erstellt falls None)
     """
     
     # Prüfe ob es ein String (Dateipfad) oder Dict ist
     if isinstance(monte_carlo_results_or_file, str):
         # Es ist ein Dateipfad - lade die Daten
         plot_monte_carlo_results_from_file(monte_carlo_results_or_file, save_path, show_plots)
-        return
+        return None
     
     # Es ist ein Dict - verwende wie bisher
     monte_carlo_results = monte_carlo_results_or_file
     
     if not monte_carlo_results or monte_carlo_results.get('n_successful', 0) == 0:
         print("⚠️ Keine erfolgreichen Monte Carlo Iterationen zum Plotten verfügbar")
-        return
+        return None
     
-    # Standard-Speicherpfad im Results-Ordner
+    # Erstelle Zeitstempel für eindeutigen Ordner (falls nicht übergeben)
+    if timestamp is None:
+        timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Standard-Speicherpfad im Results-Ordner mit eigenem Unterordner
     if save_path is None:
-        save_path = os.path.join('Results', 'monte_carlo_results.png')
+        save_path = os.path.join('Results', f'MC_{timestamp}')
+    elif not save_path.endswith(('MC_', timestamp)):
+        # Füge Zeitstempel hinzu falls nicht vorhanden
+        if save_path.endswith('/') or save_path.endswith('\\'):
+            save_path = os.path.join(save_path, f'MC_{timestamp}')
+        else:
+            save_path = f"{save_path}_MC_{timestamp}"
+    
+    # Erstelle Ordner
+    os.makedirs(save_path, exist_ok=True)
+    base_path = save_path
+    
+    print(f"📁 Erstelle Monte Carlo Ergebnisse in: {save_path}")
     
     # Parameter-Namen und Einheiten
     param_names = model_info.get('param_names', [])
@@ -91,15 +108,14 @@ def plot_monte_carlo_results(monte_carlo_results_or_file, model_info=None, save_
     
     if not available_params:
         print("⚠️ Keine Parameter-Daten zum Plotten verfügbar")
-        return
+        return timestamp
     
     # Erstelle große Figure mit Subplots
-    fig = plt.figure(figsize=(20, 16))
+    plt.figure(figsize=(20, 16))
     
     # 1. Parameter-Verteilungen (Histogramme)
     n_params = len(available_params)
     n_cols = min(4, n_params)
-    n_rows = int(np.ceil(n_params / n_cols))
     
     for i, param_name in enumerate(available_params):
         ax = plt.subplot(4, n_cols, i + 1)
@@ -129,6 +145,12 @@ def plot_monte_carlo_results(monte_carlo_results_or_file, model_info=None, save_
     
     plt.tight_layout()
     
+    # Speichere Parameter-Verteilungen
+    if save_path:
+        filename = os.path.join(base_path, "parameter_distributions.png")
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        print(f"📊 Parameter-Verteilungen gespeichert als: {filename}")
+    
     # 2. Parameter-Korrelationsmatrix
     if 'correlation_matrix' in monte_carlo_results:
         plt.figure(figsize=(12, 10))
@@ -153,6 +175,12 @@ def plot_monte_carlo_results(monte_carlo_results_or_file, model_info=None, save_
         plt.xticks(rotation=45, ha='right')
         plt.yticks(rotation=0)
         plt.tight_layout()
+        
+        # Speichere Korrelationsmatrix
+        if save_path:
+            filename = os.path.join(base_path, "correlation_matrix.png")
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            print(f"📊 Korrelationsmatrix gespeichert als: {filename}")
     
     # 3. R² Verteilung
     if 'R_squared_array' in monte_carlo_results:
@@ -173,6 +201,12 @@ def plot_monte_carlo_results(monte_carlo_results_or_file, model_info=None, save_
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
+        
+        # Speichere R² Verteilung
+        if save_path:
+            filename = os.path.join(base_path, "r2_distribution.png")
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            print(f"📊 R² Verteilung gespeichert als: {filename}")
     
     # 4. Parameter-Boxplots (Übersicht)
     plt.figure(figsize=(15, 8))
@@ -200,6 +234,12 @@ def plot_monte_carlo_results(monte_carlo_results_or_file, model_info=None, save_
     plt.xticks(rotation=45, ha='right')
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
+    
+    # Speichere Boxplots
+    if save_path:
+        filename = os.path.join(base_path, "parameter_boxplots.png")
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        print(f"📊 Parameter-Boxplots gespeichert als: {filename}")
     
     # 5. Erfolgsrate und Fehlschläge
     plt.figure(figsize=(12, 8))
@@ -260,22 +300,18 @@ def plot_monte_carlo_results(monte_carlo_results_or_file, model_info=None, save_
     
     plt.tight_layout()
     
-    # Speichern falls gewünscht
+    # Speichere Erfolgsrate und Fehlschläge
     if save_path:
-        # Stelle sicher, dass das Results-Verzeichnis existiert
-        os.makedirs('Results', exist_ok=True)
-        
-        if save_path.endswith('.png'):
-            filename = save_path
-        else:
-            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"Results/monte_carlo_results_{timestamp}.png"
-            
+        filename = os.path.join(base_path, "success_analysis.png")
         plt.savefig(filename, dpi=300, bbox_inches='tight')
-        print(f"📊 Plots gespeichert als: {filename}")
+        print(f"📊 Erfolgsrate-Analyse gespeichert als: {filename}")
     
+    # Zeige Plots falls gewünscht
     if show_plots:
         plt.show()
+    
+    # Gebe Zeitstempel zurück für konsistente Ordnerbenennung
+    return timestamp
 
 def plot_parameter_convergence(monte_carlo_results, model_info, save_path=None, show_plots=True):
     """
@@ -485,26 +521,36 @@ def plot_fitting_quality(monte_carlo_results, processed_data=None, model_info=No
         plt.show()
         plt.show()
 
-def create_monte_carlo_report(monte_carlo_results, model_info, save_path=None):
+def create_monte_carlo_report(monte_carlo_results, model_info, save_path=None, timestamp=None):
     """
     Erstellt einen umfassenden Bericht der Monte Carlo Ergebnisse
     
     Args:
         monte_carlo_results: Dict mit Monte Carlo Ergebnissen
         model_info: Dict mit Modellinformationen
-        save_path: Optional - Basis-Pfad zum Speichern des Berichts (Standard: Results/)
+        save_path: Optional - Pfad zum Speichern des Berichts (Standard: Results/MC_YYYYMMDD_HHMMSS/)
+        timestamp: Optional - Zeitstempel für konsistente Ordnernamen (wird automatisch erstellt falls None)
     """
     
-    # Standard-Speicherpfad im Results-Ordner
-    if save_path is None:
-        save_path = 'Results'
+    # Erstelle Zeitstempel für eindeutigen Ordner (falls nicht übergeben)
+    if timestamp is None:
+        timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
     
-    # Stelle sicher, dass das Results-Verzeichnis existiert
+    # Standard-Speicherpfad im Results-Ordner mit eigenem Unterordner
+    if save_path is None:
+        save_path = os.path.join('Results', f'MC_{timestamp}')
+    elif not save_path.endswith(('MC_', timestamp)):
+        # Füge Zeitstempel hinzu falls nicht vorhanden
+        if save_path.endswith('/') or save_path.endswith('\\'):
+            save_path = os.path.join(save_path, f'MC_{timestamp}')
+        else:
+            save_path = f"{save_path}_MC_{timestamp}"
+    
+    # Stelle sicher, dass das Verzeichnis existiert
     os.makedirs(save_path, exist_ok=True)
         
     # Text-Bericht erstellen
-    timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
-    report_file = os.path.join(save_path, f"monte_carlo_report_{timestamp}.txt")
+    report_file = os.path.join(save_path, "monte_carlo_report.txt")
     
     with open(report_file, 'w', encoding='utf-8') as f:
             f.write("="*80 + "\n")
@@ -521,6 +567,13 @@ def create_monte_carlo_report(monte_carlo_results, model_info, save_path=None):
             f.write(f"Erfolgreiche Iterationen: {monte_carlo_results['n_successful']}\n")
             f.write(f"Erfolgsrate: {monte_carlo_results['success_rate']*100:.2f}%\n\n")
             
+            f.write("EINGABEPARAMETER:\n")
+            f.write("-" * 30 + "\n")
+            f.write(f"Number of Iterations: {monte_carlo_results.get('n_iterations', 'N/A')}\n")
+            f.write(f"Noise Level: {monte_carlo_results.get('noise_level', 'N/A')}\n")
+            f.write(f"Noise Model: {monte_carlo_results.get('noise_model', 'N/A')}\n")
+            f.write(f"Noise Level (Concentration): {monte_carlo_results.get('noise_level_conc', 'N/A')}\n")
+
             # Parameter-Ergebnisse
             f.write("PARAMETER-ERGEBNISSE:\n")
             f.write("-" * 30 + "\n")
@@ -1082,7 +1135,206 @@ def plot_component_analysis(simulation_dir="Results/Simulations", save_path=None
         print(f"{component_names[comp_idx]:8s}: {np.mean(final_conc):8.4f} ± {np.std(final_conc):6.4f} mM "
               f"(CV: {np.std(final_conc)/np.mean(final_conc)*100:.1f}%)")
 
+def plot_corner_plot(monte_carlo_results, model_info, save_path=None, show_plots=True, use_corner_library=True, timestamp=None):
+    """
+    Erstellt Corner Plots für Monte Carlo Parameter-Ergebnisse
+    
+    Args:
+        monte_carlo_results: Dict mit Monte Carlo Ergebnissen
+        model_info: Dict mit Modellinformationen
+        save_path: Optional - Pfad zum Speichern (Standard: Results/MC_YYYYMMDD_HHMMSS/corner_plot.png)
+        show_plots: Bool - Ob Plots angezeigt werden sollen
+        use_corner_library: Bool - Verwende corner library (falls installiert) oder seaborn
+        timestamp: Optional - Zeitstempel für konsistente Ordnernamen (wird automatisch erstellt falls None)
+    """
+    
+    # Erstelle Zeitstempel für eindeutigen Ordner (falls nicht übergeben)
+    if timestamp is None:
+        timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+    
+    if save_path is None:
+        save_path = os.path.join('Results', f'MC_{timestamp}')
+    elif not save_path.endswith(('MC_', timestamp)):
+        # Füge Zeitstempel hinzu falls nicht vorhanden
+        if save_path.endswith('/') or save_path.endswith('\\'):
+            save_path = os.path.join(save_path, f'MC_{timestamp}')
+        else:
+            save_path = f"{save_path}_MC_{timestamp}"
+    
+    # Erstelle Ordner
+    os.makedirs(save_path, exist_ok=True)
+    
+    # Parameter-Namen extrahieren
+    param_names = model_info.get('param_names', [])
+    param_units = model_info.get('param_units', [''] * len(param_names))
+    
+    # Filter Parameter mit verfügbaren Daten
+    available_params = []
+    param_data = {}
+    
+    for param_name in param_names:
+        if f'{param_name}_values' in monte_carlo_results:
+            available_params.append(param_name)
+            param_data[param_name] = monte_carlo_results[f'{param_name}_values']
+    
+    if len(available_params) < 2:
+        print("⚠️ Zu wenige Parameter für Corner Plot (mindestens 2 benötigt)")
+        return
+    
+    # Erstelle DataFrame
+    df_params = pd.DataFrame(param_data)
+    
+    # Parameter-Labels mit Einheiten
+    param_labels = []
+    for param_name in available_params:
+        unit_idx = param_names.index(param_name) if param_name in param_names else 0
+        unit = param_units[unit_idx] if unit_idx < len(param_units) else ''
+        if unit:
+            param_labels.append(f'{param_name} [{unit}]')
+        else:
+            param_labels.append(param_name)
+    
+    # Versuche corner library zu verwenden
+    if use_corner_library:
+        try:
+            import corner
+            
+            print("📊 Erstelle Corner Plot mit corner library...")
+            
+            # Berechne Quantile für Konturen
+            quantiles = [0.16, 0.5, 0.84]  # 1σ, Median, 1σ
+            
+            # Corner Plot erstellen
+            fig = corner.corner(df_params.values, 
+                               labels=param_labels,
+                               show_titles=True,
+                               title_kwargs={"fontsize": 24},
+                               label_kwargs={"fontsize": 24},
+                               hist_kwargs={"density": True},
+                               plot_kwargs={"alpha": 0.6},
+                               contour_kwargs={"colors": "blue"},
+                               bins=30,
+                               fig=None)
+            
+            # Titel hinzufügen
+            fig.suptitle('Parameter Corner Plot (Monte Carlo)', fontsize=24, fontweight='bold', y=0.98)
+            
+            # Wahre Werte einzeichnen (falls verfügbar)
+            if 'true_values' in monte_carlo_results:
+                true_values = [monte_carlo_results['true_values'].get(param, None) 
+                              for param in available_params]
+                if all(v is not None for v in true_values):
+                    corner.overplot_lines(fig, true_values, color="red", linewidth=2)
+                    corner.overplot_points(fig, [true_values], marker="s", color="red", markersize=8)
+            
+        except ImportError:
+            print("⚠️ corner library nicht installiert, verwende seaborn...")
+            use_corner_library = False
+    
+    # Fallback: seaborn pairplot
+    if not use_corner_library:
+        print("📊 Erstelle Corner Plot mit seaborn...")
+        
+        # Bestimme optimale Figure-Größe
+        n_params = len(available_params)
+        
+        # PairGrid für mehr Kontrolle
+        g = sns.PairGrid(df_params, vars=available_params, diag_sharey=False)
+        
+        # Obere Dreiecksmatrix: Scatterplots mit Dichte-Konturen
+        g.map_upper(sns.scatterplot, alpha=0.6, s=20)
+        g.map_upper(sns.kdeplot, colors="red", alpha=0.5)
+        
+        # Untere Dreiecksmatrix: Scatterplots
+        g.map_lower(sns.scatterplot, alpha=0.6, s=20)
+        
+        # Diagonale: Histogramme
+        g.map_diag(sns.histplot, kde=True, stat="density", alpha=0.7)
+        
+        # Achsenbeschriftungen mit Einheiten
+        for i, param_label in enumerate(param_labels):
+            # X-Achsen (untere Reihe)
+            g.axes[-1, i].set_xlabel(param_label, fontsize=10)
+            # Y-Achsen (linke Spalte)
+            g.axes[i, 0].set_ylabel(param_label, fontsize=10)
+        
+        # Titel
+        g.fig.suptitle('Parameter Corner Plot (Monte Carlo)', fontsize=16, fontweight='bold', y=0.98)
+        
+        # Figure-Referenz für Speichern
+        fig = g.fig
 
+    plt.tight_layout()
+    
+    # Speichern
+    if save_path:
+        filename = os.path.join(save_path, "corner_plot.png")
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        print(f"📊 Corner Plot gespeichert als: {filename}")
+    
+    if show_plots:
+        plt.show()
+    
+    print(f"✅ Corner Plot erstellt mit {len(available_params)} Parametern")
+
+def plot_corner_plot_simple(param_data_dict, param_labels=None, title="Parameter Corner Plot", 
+                           save_path=None, show_plots=True):
+    """
+    Einfache Corner Plot Funktion für beliebige Parameter-Daten
+    
+    Args:
+        param_data_dict: Dict mit {param_name: values_array}
+        param_labels: Optional - Liste mit Achsenbeschriftungen
+        title: Titel des Plots
+        save_path: Optional - Pfad zum Speichern
+        show_plots: Bool - Ob Plot angezeigt werden soll
+    """
+    
+    # DataFrame erstellen
+    df = pd.DataFrame(param_data_dict)
+    
+    if param_labels is None:
+        param_labels = list(param_data_dict.keys())
+    
+    if len(df.columns) < 2:
+        print("⚠️ Mindestens 2 Parameter für Corner Plot benötigt")
+        return
+    
+    # Versuche corner library
+    try:
+        import corner
+        
+        fig = corner.corner(df.values, 
+                           labels=param_labels,
+                           quantiles=[0.16, 0.5, 0.84],
+                           show_titles=True,
+                           title_kwargs={"fontsize": 12})
+        
+        fig.suptitle(title, fontsize=14, fontweight='bold', y=0.98)
+        
+    except ImportError:
+        # Fallback zu seaborn
+        g = sns.PairGrid(df, diag_sharey=False)
+        g.map_upper(sns.scatterplot, alpha=0.6)
+        g.map_lower(sns.scatterplot, alpha=0.6)
+        g.map_diag(sns.histplot, kde=True, alpha=0.7)
+        
+        # Labels setzen
+        for i, label in enumerate(param_labels):
+            g.axes[-1, i].set_xlabel(label, fontsize=10)
+            g.axes[i, 0].set_ylabel(label, fontsize=10)
+        
+        g.fig.suptitle(title, fontsize=14, fontweight='bold', y=0.98)
+        fig = g.fig
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"📊 Corner Plot gespeichert als: {save_path}")
+    
+    if show_plots:
+        plt.show()
 
 if __name__ == "__main__":
 

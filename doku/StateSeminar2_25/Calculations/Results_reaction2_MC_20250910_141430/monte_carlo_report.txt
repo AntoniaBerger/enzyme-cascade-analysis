@@ -1,0 +1,72 @@
+================================================================================
+MONTE CARLO SIMULATION BERICHT
+================================================================================
+
+Modell: Komplettes Drei-Reaktions-System mit Inhibitionen
+Datum: 2025-09-10 14:14:52
+
+SIMULATIONSSTATISTIKEN:
+------------------------------
+Gesamte Iterationen: 5000
+Erfolgreiche Iterationen: 5000
+Erfolgsrate: 100.00%
+
+EINGABEPARAMETER:
+------------------------------
+Number of Iterations: N/A
+Noise Level: {'calibration': 0.0, 'reaction': 0.01, 'concentration': 0.0}
+Noise Model: plate_reader
+Noise Level (Concentration): N/A
+PARAMETER-ERGEBNISSE:
+------------------------------
+Vmax2       :  11.7138 ± 3.6310 U    [  5.8468,  62.2371]
+    Median:  10.9140 U
+    95% CI: [  7.4103,  20.5766] U
+KmLactol    : 105.6098 ± 3.9976 mM   [ 93.5864, 108.9847]
+    Median: 107.0163 mM
+    95% CI: [ 94.8713, 108.2118] mM
+KmNADH      :  11.7490 ± 3.8209 mM   [  5.5451,  64.6556]
+    Median:  10.9063 mM
+    95% CI: [  7.2388,  21.0192] mM
+KiPD        : 138.8910 ± 4.0146 mM   [126.8981, 142.2427]
+    Median: 140.3132 mM
+    95% CI: [128.1134, 141.4817] mM
+
+R² STATISTIKEN:
+------------------------------
+R² Mittelwert: 0.965390
+R² Standardabweichung: 0.001652
+R² Median: 0.965689
+R² Minimum: 0.956368
+R² Maximum: 0.971160
+
+FEHLSCHLAG-ANALYSE:
+------------------------------
+calibration         :      0 (0.00%)
+data_processing     :      0 (0.00%)
+fitting             :      0 (0.00%)
+validation          :      0 (0.00%)
+=== PARAMETER-STATISTIKEN ===
+Vmax2: 11.7138 ± 3.6310 U
+  Median: 10.9140 U
+  95% CI: [7.4103, 20.5766] U
+KmLactol: 105.6098 ± 3.9976 mM
+  Median: 107.0163 mM
+  95% CI: [94.8713, 108.2118] mM
+KmNADH: 11.7490 ± 3.8209 mM
+  Median: 10.9063 mM
+  95% CI: [7.2388, 21.0192] mM
+KiPD: 138.8910 ± 4.0146 mM
+  Median: 140.3132 mM
+  95% CI: [128.1134, 141.4817] mM
+
+R²: 0.9654 ± 0.0017
+R² Median: 0.9657
+
+=== PARAMETER-KORRELATIONEN ===
+Vmax2 ↔ KmLactol: 0.036
+Vmax2 ↔ KmNADH: 0.999
+Vmax2 ↔ KiPD: 0.024
+KmLactol ↔ KmNADH: 0.004
+KmLactol ↔ KiPD: 0.997
+KmNADH ↔ KiPD: -0.008

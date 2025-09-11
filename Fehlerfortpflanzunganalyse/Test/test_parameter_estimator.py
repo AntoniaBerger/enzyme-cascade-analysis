@@ -1,359 +1,512 @@
 import unittest
-import sys
-import os
 import numpy as np
 import pandas as pd
+import sys
+import os
 from unittest.mock import patch
+import tempfile
+import shutil
 
+# Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from parameter_estimator import (
-    estimate_parameters, fit_parameters, monte_carlo_simulation,
-    validate_parameters
-)
+from parameter_estimator import estimate_parameters, fit_parameters, monte_carlo_simulation
 
 
 class TestParameterEstimator(unittest.TestCase):
-
+    """Unit tests for parameter_estimator.py functions"""
+    
     def setUp(self):
-        """Setup für Testdaten"""
-        # Test-Daten für zwei-Substrat Michaelis-Menten
-        self.test_concentrations = {
-            "r1_nad_conc": np.array([0.5, 1.0, 2.0, 5.0]),
-            "r1_nad_const": 500.0,
-            "r1_pd_conc": np.array([100.0, 200.0, 500.0, 1000.0]),
-            "r1_pd_const": 5.0,
+        """Set up test fixtures before each test method."""
+        # Create sample processed data
+        self.sample_processed_data = pd.DataFrame({
+            'reaction': [1, 1, 1, 2, 2, 2, 3, 3, 3],
+            'c1': [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            'c2': [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5],
+            'c3': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+            'rates': [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
+        })
+        
+        # Create simple test model info
+        self.simple_model_info = {
+            'name': 'test_model',
+            'function': lambda x, a, b: a * x[0] + b,
+            'param_names': ['a', 'b'],
+            'param_units': ['U', 'U'],
+            'initial_guess_func': lambda activities, substrate_data: [1.0, 0.1],
+            'bounds_lower': [0, 0],
+            'bounds_upper': [np.inf, np.inf],
+            'description': 'Simple linear test model'
         }
         
-        self.test_rates = {
-            "r1_nad_rates": np.array([0.1, 0.15, 0.2, 0.25]),
-            "r1_pd_rates": np.array([0.08, 0.12, 0.18, 0.22]),
+        # Create sample data_info
+        self.sample_data_info = {
+            'test_key': 'test_value'
         }
         
-        # Test-Model Definition
-        def test_two_substrat_michaelis_menten(concentration_data, Vmax, Km1, Km2):
-            S1_values, S2_values = concentration_data
-            S1_values = np.asarray(S1_values)
-            S2_values = np.asarray(S2_values)
-            return (Vmax * S1_values * S2_values) / ((Km1 + S1_values) * (Km2 + S2_values))
+        # Create sample calibration data
+        self.sample_calibration_data = pd.DataFrame({
+            'concentration': [0.0, 1.0, 2.0, 3.0, 4.0],
+            'absorbance': [0.0, 0.1, 0.2, 0.3, 0.4]
+        })
         
-        self.test_model = {
-            "name": "two_substrat_michaelis_menten",
-            "function": test_two_substrat_michaelis_menten,
-            "param_names": ["Vmax", "Km_NAD", "Km_PD"],
-            "param_units": ["U", "mM", "mM"],
-            "substrate_keys": ["r1_nad_conc", "r1_pd_conc"],
-            "initial_guess_func": lambda activities, substrate_data: [max(activities) if len(activities) > 0 else 1.0, 1.0, 1.0],
-            "bounds_lower": [0, 0, 0],
-            "bounds_upper": [np.inf, np.inf, np.inf],
-            "description": "Test Two-Substrate Michaelis-Menten"
-        }
-
-    @patch('parameter_estimator.curve_fit')
-    def test_fit_parameters_success(self, mock_curve_fit):
-        """Test fit_parameters mit erfolgreichem Fitting"""
-        # Mock curve_fit Rückgabe
-        mock_params = [10.0, 2.0, 3.0]
-        mock_covariance = np.array([[1.0, 0.1, 0.1], [0.1, 1.0, 0.1], [0.1, 0.1, 1.0]])
-        mock_curve_fit.return_value = (mock_params, mock_covariance)
-        
-        # Verwende realistische Testdaten die zur Funktion passen
-        S1_values = np.array([1.0, 2.0, 3.0])
-        S2_values = np.array([5.0, 10.0, 15.0])
-        substrate_data = [S1_values, S2_values]
-        
-        # Simuliere Aktivitäten basierend auf der Funktion mit bekannten Parametern
-        Vmax_true = 10.0
-        Km1_true = 2.0
-        Km2_true = 3.0
-        activities = (Vmax_true * S1_values * S2_values) / ((Km1_true + S1_values) * (Km2_true + S2_values))
-        
-        result = fit_parameters(substrate_data, activities, self.test_model)
-        
-        self.assertTrue(result['success'])
-        np.testing.assert_array_almost_equal(result['params'], mock_params)
-        # Da wir curve_fit mocken, wird ein Mock-R² berechnet
-        self.assertIsInstance(result['r_squared'], (float, np.floating))
-
-    @patch('parameter_estimator.curve_fit')
-    def test_fit_parameters_failure(self, mock_curve_fit):
-        """Test fit_parameters mit Fitting-Fehler"""
-        mock_curve_fit.side_effect = RuntimeError("Fitting failed")
-        
-        substrate_data = [[1.0, 2.0], [5.0, 10.0]]
-        activities = np.array([0.1, 0.2])
-        
-        result = fit_parameters(substrate_data, activities, self.test_model)
-        
-        self.assertFalse(result['success'])
-
-    @patch('parameter_estimator.make_fitting_data')
-    @patch('parameter_estimator.fit_parameters')
-    def test_estimate_parameters_success(self, mock_fit_parameters, mock_make_fitting_data):
-        """Test estimate_parameters mit erfolgreichen Mocks"""
-        # Mock make_fitting_data
-        mock_substrate_data = [[1.0, 2.0], [5.0, 10.0]]
-        mock_activities = np.array([0.1, 0.2])
-        mock_make_fitting_data.return_value = (mock_substrate_data, mock_activities)
-        
-        # Mock fit_parameters
-        mock_result = {
-            'success': True,
-            'params': [10.0, 2.0, 3.0],
-            'param_errors': [1.0, 0.5, 0.5],
-            'r_squared': 0.95,
-            'model_name': 'test_model',
-            'description': 'Test Model'
-        }
-        mock_fit_parameters.return_value = mock_result
-        
-        # Use correct function signature: model_info, data_info, concentrations, rates
-        data_info = {'constants': {}, 'active_params': {}}
-        
-        result = estimate_parameters(self.test_model, data_info, self.test_concentrations, self.test_rates)
-        
-        # Überprüfe, dass beide Funktionen aufgerufen wurden
-        mock_make_fitting_data.assert_called_once_with(self.test_model, data_info, self.test_concentrations, self.test_rates, verbose=True)
-        mock_fit_parameters.assert_called_once_with(mock_substrate_data, mock_activities, self.test_model, verbose=True)
-        
-        # Überprüfe Rückgabewert
-        self.assertEqual(result, mock_result)
-
-    @patch('parameter_estimator.make_fitting_data')
-    def test_estimate_parameters_make_fitting_data_failure(self, mock_make_fitting_data):
-        """Test estimate_parameters wenn make_fitting_data fehlschlägt"""
-        mock_make_fitting_data.return_value = (None, None)
-        
-        data_info = {'constants': {}, 'active_params': {}}
-        
-        # Dies sollte zu einem Fehler führen, da fit_parameters None-Werte nicht verarbeiten kann
-        with self.assertRaises((TypeError, AttributeError)):
-            estimate_parameters(self.test_model, data_info, self.test_concentrations, self.test_rates)
-
-    def test_fit_parameters_empty_activities(self):
-        """Test fit_parameters mit leeren Aktivitätsdaten"""
-        substrate_data = [[1.0, 2.0], [5.0, 10.0]]
-        empty_activities = np.array([])
-        
-        result = fit_parameters(substrate_data, empty_activities, self.test_model)
-        
-        self.assertFalse(result['success'])
-
-    def test_fit_parameters_mismatched_data_lengths(self):
-        """Test fit_parameters mit unterschiedlichen Datenlängen"""
-        substrate_data = [[1.0, 2.0], [5.0, 10.0]]  # 2 Datenpunkte
-        activities = np.array([0.1, 0.2, 0.3])  # 3 Datenpunkte
-        
-        result = fit_parameters(substrate_data, activities, self.test_model)
-        
-        # Sollte fehlschlagen wegen unterschiedlicher Längen
-        self.assertFalse(result['success'])
-
-    def test_estimate_parameters_complete_workflow(self):
-        """Test des kompletten estimate_parameters Workflows mit realen Daten"""
-        # Erstelle realistische Testdaten
-        S1_test = np.array([1.0, 2.0, 5.0, 10.0])
-        S2_test = np.array([500.0, 500.0, 500.0, 500.0])
-        
-        # Simuliere Aktivitätsdaten basierend auf Michaelis-Menten
-        Vmax_true = 20.0
-        Km1_true = 2.5
-        Km2_true = 300.0
-        
-        activities_test = (Vmax_true * S1_test * S2_test) / ((Km1_true + S1_test) * (Km2_true + S2_test))
-        
-        test_concentrations = {
-            "r1_nad_conc": S1_test,
-            "r1_nad_const": 500.0,
-            "r1_pd_conc": np.array([]),  # Leer für diesen Test
-            "r1_pd_const": 5.0,
+        # Create sample reaction data
+        self.sample_reaction_data = {
+            'reaction1': pd.DataFrame(np.random.rand(10, 8)),
+            'reaction2': pd.DataFrame(np.random.rand(10, 8))
         }
         
-        test_rates = {
-            "r1_nad_rates": activities_test,
-            "r1_pd_rates": np.array([]),  # Leer für diesen Test
-        }
-        
-        data_info = {'constants': {}, 'active_params': {}}
-        
-        # Da make_fitting_data aus data_hadler kommt, mocken wir es
-        with patch('parameter_estimator.make_fitting_data') as mock_make_fitting_data:
-            mock_make_fitting_data.return_value = ([S1_test, S2_test], activities_test)
-            
-            result = estimate_parameters(self.test_model, data_info, test_concentrations, test_rates)
-            
-            # Überprüfe, dass das Fitting erfolgreich war
-            self.assertTrue(result['success'])
-            self.assertGreater(result['r_squared'], 0.8)  # Sollte gutes Fitting sein
-            
-            # Überprüfe, dass Parameter in realistischen Bereichen liegen
-            params = result['params']
-            self.assertGreater(params[0], 0)  # Vmax > 0
-            self.assertGreater(params[1], 0)  # Km1 > 0
-            self.assertGreater(params[2], 0)  # Km2 > 0
+        # Create temporary directory for test outputs
+        self.temp_dir = tempfile.mkdtemp()
+        self.original_cwd = os.getcwd()
+        os.chdir(self.temp_dir)
+    
+    def tearDown(self):
+        """Clean up after each test method."""
+        os.chdir(self.original_cwd)
+        shutil.rmtree(self.temp_dir)
 
-    def test_fit_parameters_initial_guess_function(self):
-        """Test dass die initial_guess_func korrekt aufgerufen wird"""
-        substrate_data = [[1.0, 2.0, 3.0], [5.0, 10.0, 15.0]]
-        activities = np.array([0.1, 0.2, 0.3])
-        
-        # Mock initial_guess_func um zu überprüfen, ob sie aufgerufen wird
-        def mock_initial_guess(act, sub):
-            return [max(act), 1.5, 2.5]
-        
-        test_model_copy = self.test_model.copy()
-        test_model_copy['initial_guess_func'] = mock_initial_guess
-        
-        with patch('parameter_estimator.curve_fit') as mock_curve_fit:
-            mock_curve_fit.return_value = ([10.0, 2.0, 3.0], np.eye(3))
-            
-            fit_parameters(substrate_data, activities, test_model_copy)
-            
-            # Überprüfe, dass curve_fit mit den richtigen Initial Guess aufgerufen wurde
-            call_args = mock_curve_fit.call_args
-            p0_used = call_args[1]['p0']  # p0 ist ein keyword argument
-            
-            expected_p0 = [0.3, 1.5, 2.5]  # max(activities) = 0.3
-            np.testing.assert_array_almost_equal(p0_used, expected_p0)
 
-    def test_fit_parameters_bounds_usage(self):
-        """Test dass Parameter-Grenzen korrekt verwendet werden"""
-        substrate_data = [[1.0, 2.0], [5.0, 10.0]]
-        activities = np.array([0.1, 0.2])
-        
-        with patch('parameter_estimator.curve_fit') as mock_curve_fit:
-            mock_curve_fit.return_value = ([10.0, 2.0, 3.0], np.eye(3))
-            
-            fit_parameters(substrate_data, activities, self.test_model)
-            
-            # Überprüfe, dass curve_fit mit den richtigen Grenzen aufgerufen wurde
-            call_args = mock_curve_fit.call_args
-            bounds_used = call_args[1]['bounds']
-            
-            expected_bounds = ([0, 0, 0], [np.inf, np.inf, np.inf])
-            self.assertEqual(bounds_used, expected_bounds)
-
-    @patch('parameter_estimator.estimate_parameters')
-    @patch('parameter_estimator.add_noise_reaction_dict')
-    @patch('parameter_estimator.add_noise_calibration')
-    @patch('parameter_estimator.calculate_calibration')
-    def test_monte_carlo_simulation_r1_success(self, mock_calc_cal, mock_add_noise_cal, 
-                                              mock_add_noise_reaction, mock_estimate):
-        """Test monte_carlo_simulation_r1 mit erfolgreichen Mocks"""
-        # Mock functions
-        mock_calc_cal.return_value = 0.05  # calibration slope
-        mock_add_noise_cal.return_value = pd.DataFrame()  # noisy calibration
-        mock_add_noise_reaction.return_value = {}  # noisy reaction data
-        
-        # Mock successful estimate_parameters
-        mock_successful_result = {
-            'success': True,
-            'params': [10.0, 2.0, 3.0],
-            'param_errors': [1.0, 0.5, 0.5],
-            'r_squared': 0.95
-        }
-        mock_estimate.return_value = mock_successful_result
-        
-        # Test data
-        calibration_data = pd.DataFrame()
-        reaction_data = {}
-        model_info = {'description': 'Test Model'}
-        data_info = {'active_params': {}}
-        noise_level = {'calibration': 0.05, 'reaction': 0.05}
-        
-        # Test mit wenigen Iterationen
-        results = monte_carlo_simulation(
-            calibration_data, reaction_data, model_info, data_info,
-            noise_level, n_iterations=2
-        )
-        
-        # Überprüfe Rückgabe-Format
-        self.assertIsInstance(results, dict)
-        self.assertIn('successful_results', results)
-        self.assertIn('failed_counts', results)
-        self.assertIn('n_successful', results)
-        self.assertIn('n_iterations', results)
-        
-        # Basic checks that function executed
-        self.assertIsNotNone(results)
-
-    def test_monte_carlo_simulation_r1_zero_iterations(self):
-        """Test monte_carlo_simulation_r1 mit 0 Iterationen"""
-        calibration_data = pd.DataFrame()
-        reaction_data = {}
-        model_info = {'description': 'Test Model'}
-        data_info = {'active_params': {}}
-        noise_level = {'calibration': 0.05, 'reaction': 0.05}
-        
-        results = monte_carlo_simulation(
-            calibration_data, reaction_data, model_info, data_info,
-            noise_level, n_iterations=0
-        )
-        
-        self.assertIsInstance(results, dict)
-        self.assertEqual(results['n_successful'], 0)
-        self.assertEqual(results['n_iterations'], 0)
-
-    @patch('parameter_estimator.make_fitting_data')
-    @patch('parameter_estimator.fit_parameters')
-    def test_estimate_parameters_verbose_parameter(self, mock_fit_parameters, mock_make_fitting_data):
-        """Test estimate_parameters mit verbose Parameter"""
-        # Mock make_fitting_data
-        mock_substrate_data = [[1.0, 2.0], [5.0, 10.0]]
-        mock_activities = np.array([0.1, 0.2])
-        mock_make_fitting_data.return_value = (mock_substrate_data, mock_activities)
-        
-        # Mock fit_parameters
-        mock_result = {
-            'success': True,
-            'params': [10.0, 2.0, 3.0],
-            'param_errors': [1.0, 0.5, 0.5],
-            'r_squared': 0.95
-        }
-        mock_fit_parameters.return_value = mock_result
-        
-        data_info = {'constants': {}, 'active_params': {}}
-        
-        # Test mit verbose=True
+class TestEstimateParameters(TestParameterEstimator):
+    """Tests for estimate_parameters function"""
+    
+    def test_estimate_parameters_success(self):
+        """Test successful parameter estimation"""
         result = estimate_parameters(
-            self.test_model, 
-            data_info,
-            self.test_concentrations, 
-            self.test_rates, 
-            verbose=True
+            self.simple_model_info,
+            self.sample_data_info,
+            self.sample_processed_data,
+            verbose=False
         )
         
-        # Überprüfe, dass make_fitting_data mit verbose aufgerufen wurde
-        mock_make_fitting_data.assert_called_once_with(
-            self.test_model, 
-            data_info,
-            self.test_concentrations, 
-            self.test_rates, 
-            verbose=True
+        self.assertIsInstance(result, dict)
+        self.assertIn('success', result)
+        self.assertIn('params', result)
+        self.assertIn('r_squared', result)
+        self.assertIn('model_name', result)
+        
+    def test_estimate_parameters_empty_data(self):
+        """Test parameter estimation with empty data"""
+        empty_data = pd.DataFrame()
+        
+        result = estimate_parameters(
+            self.simple_model_info,
+            self.sample_data_info,
+            empty_data,
+            verbose=False
         )
         
-        self.assertEqual(result, mock_result)
-
-    @patch('parameter_estimator.make_fitting_data')
-    @patch('parameter_estimator.fit_parameters')  
-    def test_fit_parameters_verbose_parameter(self, mock_fit_parameters, mock_make_fitting_data):
-        """Test fit_parameters mit verbose Parameter"""
-        substrate_data = [[1.0, 2.0], [5.0, 10.0]]
-        activities = np.array([0.1, 0.2])
+        self.assertIsInstance(result, dict)
+        self.assertFalse(result.get('success', True))
+        self.assertIn('error', result)
         
-        with patch('parameter_estimator.curve_fit') as mock_curve_fit:
-            mock_curve_fit.return_value = ([10.0, 2.0, 3.0], np.eye(3))
+    def test_estimate_parameters_missing_columns(self):
+        """Test parameter estimation with missing required columns"""
+        incomplete_data = pd.DataFrame({
+            'reaction': [1, 2, 3],
+            'rates': [0.1, 0.2, 0.3]
+            # Missing c1, c2, c3 columns
+        })
+        
+        result = estimate_parameters(
+            self.simple_model_info,
+            self.sample_data_info,
+            incomplete_data,
+            verbose=False
+        )
+        
+        self.assertIsInstance(result, dict)
+        # Should handle missing columns gracefully by filling with zeros
+        
+    def test_estimate_parameters_verbose_mode(self):
+        """Test parameter estimation in verbose mode"""
+        with patch('builtins.print') as mock_print:
+            estimate_parameters(
+                self.simple_model_info,
+                self.sample_data_info,
+                self.sample_processed_data,
+                verbose=True
+            )
             
-            # Test mit verbose=True
-            with patch('builtins.print') as mock_print:
-                result = fit_parameters(substrate_data, activities, self.test_model, verbose=True)
-                
-                # Überprüfe, dass verbose output erzeugt wurde
-                mock_print.assert_called()
-                
-            self.assertTrue(result['success'])
+            # Check that print was called (verbose output)
+            mock_print.assert_called()
+            
+    def test_estimate_parameters_custom_sigma(self):
+        """Test parameter estimation with custom sigma value"""
+        result = estimate_parameters(
+            self.simple_model_info,
+            self.sample_data_info,
+            self.sample_processed_data,
+            sigma=2.0,
+            verbose=False
+        )
+        
+        self.assertIsInstance(result, dict)
+
+
+class TestFitParameters(TestParameterEstimator):
+    """Tests for fit_parameters function"""
+    
+    def test_fit_parameters_success(self):
+        """Test successful parameter fitting"""
+        # Create simple test data
+        x_data = [np.array([1, 2, 3, 4, 5])]
+        y_data = np.array([2.1, 4.2, 6.1, 8.2, 10.1])  # approximately y = 2*x
+        
+        simple_model = {
+            'name': 'linear',
+            'function': lambda x, a: a * x[0],
+            'param_names': ['slope'],
+            'param_units': ['U'],
+            'initial_guess_func': lambda activities, substrate_data: [1.0],
+            'bounds_lower': [0],
+            'bounds_upper': [np.inf],
+            'description': 'Linear model y = a*x'
+        }
+        
+        result = fit_parameters(x_data, y_data, simple_model, verbose=False)
+        
+        self.assertIsInstance(result, dict)
+        self.assertTrue(result.get('success', False))
+        self.assertIn('params', result)
+        self.assertIn('param_errors', result)
+        self.assertIn('r_squared', result)
+        self.assertIn('correlation_matrix', result)
+        
+        # Check that fitted parameter is close to expected value (2.0)
+        self.assertAlmostEqual(result['params'][0], 2.0, places=0)
+        
+    def test_fit_parameters_empty_activities(self):
+        """Test fitting with empty activities array"""
+        x_data = [np.array([1, 2, 3])]
+        y_data = np.array([])
+        
+        result = fit_parameters(x_data, y_data, self.simple_model_info, verbose=False)
+        
+        self.assertIsInstance(result, dict)
+        self.assertFalse(result.get('success', True))
+        
+    def test_fit_parameters_fitting_failure(self):
+        """Test fitting when curve_fit fails"""
+        # Create data and model that will definitely cause fitting to fail
+        x_data = [np.array([1, 2, 3])]
+        y_data = np.array([1, 2, 3])
+        
+        # Model with impossible constraints - upper bound lower than lower bound
+        bad_model = {
+            'name': 'bad_model',
+            'function': lambda x, a: a * x[0],
+            'param_names': ['a'],
+            'param_units': ['U'],
+            'initial_guess_func': lambda activities, substrate_data: [1.0],
+            'bounds_lower': [10],    # Lower bound higher than upper bound
+            'bounds_upper': [1],     # This will cause curve_fit to fail
+            'description': 'Bad model for testing with impossible bounds'
+        }
+        
+        result = fit_parameters(x_data, y_data, bad_model, verbose=False)
+        
+        self.assertIsInstance(result, dict)
+        self.assertFalse(result.get('success', True))
+        
+    def test_fit_parameters_correlation_matrix(self):
+        """Test correlation matrix calculation"""
+        # Create data for two-parameter model
+        x_data = [np.array([1, 2, 3, 4, 5])]
+        y_data = np.array([3.1, 5.2, 7.1, 9.2, 11.1])  # approximately y = 2*x + 1
+        
+        two_param_model = {
+            'name': 'linear_with_intercept',
+            'function': lambda x, a, b: a * x[0] + b,
+            'param_names': ['slope', 'intercept'],
+            'param_units': ['U', 'U'],
+            'initial_guess_func': lambda activities, substrate_data: [1.0, 0.0],
+            'bounds_lower': [0, -np.inf],
+            'bounds_upper': [np.inf, np.inf],
+            'description': 'Linear model y = a*x + b'
+        }
+        
+        result = fit_parameters(x_data, y_data, two_param_model, verbose=False)
+        
+        self.assertIsInstance(result, dict)
+        self.assertTrue(result.get('success', False))
+        self.assertIsNotNone(result.get('correlation_matrix'))
+        
+        # Correlation matrix should be 2x2 for two parameters
+        corr_matrix = result['correlation_matrix']
+        self.assertEqual(corr_matrix.shape, (2, 2))
+        
+        # Diagonal elements should be 1.0
+        np.testing.assert_allclose(np.diag(corr_matrix), [1.0, 1.0], rtol=1e-10)
+
+
+class TestMonteCarloSimulation(TestParameterEstimator):
+    """Tests for monte_carlo_simulation function"""
+    
+    @patch('parameter_estimator.add_noise_calibration')
+    @patch('parameter_estimator.calc_calibration_slope')
+    @patch('parameter_estimator.add_noise_plate_reader_data')
+    @patch('parameter_estimator.compute_processed_data')
+    @patch('parameter_estimator.estimate_parameters')
+    @patch('parameter_estimator.os.makedirs')
+    @patch('builtins.open', create=True)
+    @patch('parameter_estimator.pickle.dump')
+    def test_monte_carlo_simulation_success(self, mock_pickle, mock_open, mock_makedirs,
+                                          mock_estimate, mock_compute, mock_noise_plate,
+                                          mock_calc_slope, mock_noise_calib):
+        """Test successful Monte Carlo simulation"""
+        
+        # Setup mocks
+        mock_noise_calib.return_value = self.sample_calibration_data
+        mock_calc_slope.return_value = 0.1
+        mock_noise_plate.return_value = self.sample_reaction_data
+        mock_compute.return_value = self.sample_processed_data
+        
+        # Mock successful parameter estimation
+        mock_estimate.return_value = {
+            'success': True,
+            'params': np.array([1.0, 2.0]),
+            'param_errors': np.array([0.1, 0.2]),
+            'r_squared': 0.95
+        }
+        
+        # Setup model info for Monte Carlo
+        mc_model_info = {
+            'name': 'test_mc_model',
+            'description': 'Test model for Monte Carlo',
+            'param_names': ['param1', 'param2'],
+            'param_units': ['U', 'U']
+        }
+        
+        noise_level = {
+            'calibration': 0.01,
+            'reaction': 0.01,
+            'concentration': 0.01
+        }
+        
+        # Run Monte Carlo with few iterations for testing
+        result = monte_carlo_simulation(
+            self.sample_calibration_data,
+            self.sample_reaction_data,
+            mc_model_info,
+            self.sample_data_info,
+            noise_level,
+            n_iterations=10,
+            verbose=False
+        )
+        
+        self.assertIsInstance(result, dict)
+        self.assertIn('n_successful', result)
+        self.assertIn('n_total', result)
+        self.assertIn('success_rate', result)
+        self.assertIn('model_name', result)
+        self.assertEqual(result['n_total'], 10)
+        
+    @patch('parameter_estimator.add_noise_calibration')
+    @patch('parameter_estimator.calc_calibration_slope')
+    def test_monte_carlo_simulation_calibration_failure(self, mock_calc_slope, mock_noise_calib):
+        """Test Monte Carlo simulation with calibration failure"""
+        
+        # Setup mocks to fail
+        mock_noise_calib.side_effect = Exception("Calibration failed")
+        
+        mc_model_info = {
+            'name': 'test_mc_model',
+            'description': 'Test model for Monte Carlo',
+            'param_names': ['param1'],
+            'param_units': ['U']
+        }
+        
+        noise_level = {
+            'calibration': 0.01,
+            'reaction': 0.01,
+            'concentration': 0.01
+        }
+        
+        # Should handle calibration failure gracefully
+        result = monte_carlo_simulation(
+            self.sample_calibration_data,
+            self.sample_reaction_data,
+            mc_model_info,
+            self.sample_data_info,
+            noise_level,
+            n_iterations=5,
+            verbose=False
+        )
+        
+        self.assertIsInstance(result, dict)
+        
+    @patch('parameter_estimator.add_noise_calibration')
+    @patch('parameter_estimator.calc_calibration_slope')
+    @patch('parameter_estimator.add_noise_processed_data')
+    @patch('parameter_estimator.compute_processed_data')
+    def test_monte_carlo_simulation_processed_data_noise(self, mock_compute, mock_noise_processed,
+                                                        mock_calc_slope, mock_noise_calib):
+        """Test Monte Carlo simulation with processed data noise model"""
+        
+        # Setup mocks
+        mock_noise_calib.return_value = self.sample_calibration_data
+        mock_calc_slope.return_value = 0.1
+        mock_compute.return_value = self.sample_processed_data
+        mock_noise_processed.return_value = self.sample_processed_data
+        
+        mc_model_info = {
+            'name': 'test_mc_model',
+            'description': 'Test model for Monte Carlo',
+            'param_names': ['param1'],
+            'param_units': ['U']
+        }
+        
+        noise_level = {
+            'calibration': 0.01,
+            'reaction': 0.01,
+            'concentration': 0.01
+        }
+        
+        # Test with processed_data noise model
+        result = monte_carlo_simulation(
+            self.sample_calibration_data,
+            self.sample_reaction_data,
+            mc_model_info,
+            self.sample_data_info,
+            noise_level,
+            noise_model="processed_data",
+            n_iterations=5,
+            verbose=False
+        )
+        
+        self.assertIsInstance(result, dict)
+        mock_noise_processed.assert_called()
+        
+    def test_monte_carlo_simulation_insufficient_results(self):
+        """Test Monte Carlo simulation with insufficient successful results"""
+        
+        mc_model_info = {
+            'name': 'test_mc_model',
+            'description': 'Test model for Monte Carlo',
+            'param_names': ['param1'],
+            'param_units': ['U']
+        }
+        
+        noise_level = {
+            'calibration': 0.01,
+            'reaction': 0.01,
+            'concentration': 0.01
+        }
+        
+        # Mock everything to fail
+        with patch('parameter_estimator.add_noise_calibration') as mock_noise_calib:
+            mock_noise_calib.side_effect = Exception("Always fail")
+            
+            result = monte_carlo_simulation(
+                self.sample_calibration_data,
+                self.sample_reaction_data,
+                mc_model_info,
+                self.sample_data_info,
+                noise_level,
+                n_iterations=5,
+                verbose=False
+            )
+            
+            self.assertIsInstance(result, dict)
+            self.assertLess(result.get('n_successful', 0), 10)  # Should have fewer than 10 successful
+
+
+class TestParameterEstimatorIntegration(TestParameterEstimator):
+    """Integration tests for parameter_estimator functions"""
+    
+    def test_full_workflow_simple_model(self):
+        """Test the full workflow with a simple model"""
+        
+        # Create synthetic data that follows a known model
+        np.random.seed(42)  # For reproducible results
+        
+        # Generate data: y = 2*x + noise
+        x_true = np.linspace(1, 10, 20)
+        y_true = 2.0 * x_true + 0.1 * np.random.randn(20)
+        
+        # Create DataFrame in expected format
+        test_data = pd.DataFrame({
+            'reaction': [1] * 20,
+            'c1': x_true,
+            'c2': np.ones(20),  # Constant
+            'c3': np.zeros(20),  # Not used
+            'rates': y_true
+        })
+        
+        # Define simple linear model
+        linear_model = {
+            'name': 'linear_test',
+            'function': lambda x, a: a * x[0],  # y = a * x1
+            'param_names': ['slope'],
+            'param_units': ['U'],
+            'initial_guess_func': lambda activities, substrate_data: [1.0],
+            'bounds_lower': [0],
+            'bounds_upper': [np.inf],
+            'description': 'Simple linear model for testing'
+        }
+        
+        # Test parameter estimation
+        result = estimate_parameters(
+            linear_model,
+            self.sample_data_info,
+            test_data,
+            verbose=False
+        )
+        
+        self.assertTrue(result.get('success', False))
+        self.assertAlmostEqual(result['params'][0], 2.0, places=0)  # Should recover slope ≈ 2
+        self.assertGreater(result['r_squared'], 0.9)  # Should have good fit
+        
+    def test_error_handling_robustness(self):
+        """Test error handling across all functions"""
+        
+        # Test with completely invalid data
+        invalid_data = pd.DataFrame({
+            'invalid_column': [1, 2, 3]
+        })
+        
+        result = estimate_parameters(
+            self.simple_model_info,
+            self.sample_data_info,
+            invalid_data,
+            verbose=False
+        )
+        
+        self.assertIsInstance(result, dict)
+        self.assertFalse(result.get('success', True))
 
 
 if __name__ == '__main__':
-    # Test Suite ausführen
-    unittest.main(verbosity=2)
+    # Create a test suite
+    loader = unittest.TestLoader()
+    suite = unittest.TestSuite()
+    
+    # Add all test classes
+    suite.addTests(loader.loadTestsFromTestCase(TestEstimateParameters))
+    suite.addTests(loader.loadTestsFromTestCase(TestFitParameters))
+    suite.addTests(loader.loadTestsFromTestCase(TestMonteCarloSimulation))
+    suite.addTests(loader.loadTestsFromTestCase(TestParameterEstimatorIntegration))
+    
+    # Run the tests
+    runner = unittest.TextTestRunner(verbosity=2)
+    result = runner.run(suite)
+    
+    # Print summary
+    print(f"\n{'='*60}")
+    print("TEST SUMMARY")
+    print(f"{'='*60}")
+    print(f"Tests run: {result.testsRun}")
+    print(f"Failures: {len(result.failures)}")
+    print(f"Errors: {len(result.errors)}")
+    print(f"Success rate: {(result.testsRun - len(result.failures) - len(result.errors))/result.testsRun*100:.1f}%")
+    
+    if result.failures:
+        print("\nFAILURES:")
+        for test, traceback in result.failures:
+            print(f"- {test}: {traceback.split('AssertionError:')[-1].strip()}")
+    
+    if result.errors:
+        print("\nERRORS:")
+        for test, traceback in result.errors:
+            print(f"- {test}: {traceback.split('Exception:')[-1].strip()}")
