@@ -17,17 +17,18 @@ def estimate_parameters(data, model_func, initial_guess):
     tuple: Estimated parameters and covariance matrix.
     """
     # Extract independent variables and dependent variable from the DataFrame
-    S1 = [float(idx.split('_')[1]) for idx in data.index]
-    S2 = [float(col.split('_')[1]) for col in data.columns]
-    rates = data.values.flatten()
-
-    # Create meshgrid for S1 and S2
-    S1_grid, S2_grid = np.meshgrid(S1, S2)
-    S1_flat = S1_grid.flatten()
-    S2_flat = S2_grid.flatten()
+    x_data = []
+    for col in data.columns:
+        if col != "rate":
+            x_data.append(data[col].values)
 
     # Fit the model to the data
-    popt, pcov = opt.curve_fit(model_func, (S1_flat, S2_flat), rates, p0=initial_guess)
+    y_data = data["rate"].values
+    try:
+        popt, pcov = opt.curve_fit(model_func, x_data, y_data, p0=initial_guess, maxfev=10000)
+    except RuntimeError as e:
+        print(f"Error occurred during curve fitting: {e}")
+        return None, None
 
     return popt, pcov
 

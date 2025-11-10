@@ -6,13 +6,14 @@ import scipy.optimize as opt
 import numpy.random as random
 
 
-def monte_carlo_parameter_estimation(data, model_func, noise_level=0.1, num_iterations=1000):
+def monte_carlo_parameter_estimation(data, model_func, initial_guess,noise_level=0.1, num_iterations=1000):
     """
     Perform Monte Carlo simulation to estimate parameter uncertainties.
 
     Parameters:
     data (pd.DataFrame): DataFrame containing the experimental data.
     model_func (callable): The model function to fit to the data.
+    initial_guess (list): Initial guess for the parameters.
     noise_level (float): Standard deviation of the Gaussian noise to be added.
     num_iterations (int): Number of Monte Carlo iterations.
 
@@ -20,14 +21,16 @@ def monte_carlo_parameter_estimation(data, model_func, noise_level=0.1, num_iter
     np.ndarray: Array of estimated parameters from each iteration.
     """
     estimated_params = []
-
+    
     for _ in range(num_iterations):
         # Add Gaussian noise to the data
-        noisy_data = data + random.normal(0, noise_level, data.shape)
-        
-        # Estimate parameters using the noisy data
+        data_noisy = data.copy()
+        rates = data_noisy["rate"].values
+        noisy_rates = rates + random.normal(0, noise_level, size=rates.shape)
+        data_noisy["rate"] = noisy_rates
 
-        popt, _ = estimate_parameters(noisy_data, model_func, initial_guess=[80, 1, 1])
+        # Estimate parameters using the noisy data
+        popt, _ = estimate_parameters(data_noisy, model_func, initial_guess=initial_guess)
         estimated_params.append(popt)
 
     return np.array(estimated_params)
