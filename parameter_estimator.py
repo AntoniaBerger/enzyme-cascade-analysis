@@ -19,11 +19,11 @@ def estimate_parameters(data, model_func, initial_guess):
     # Extract independent variables and dependent variable from the DataFrame
     x_data = []
     for col in data.columns:
-        if col != "rate":
+        if col != "activity_U/mg" and col != "rate":
             x_data.append(data[col].values)
 
     # Fit the model to the data
-    y_data = data["rate"].values
+    y_data = data["activity_U/mg"].values
     try:
         popt, pcov = opt.curve_fit(model_func, x_data, y_data, p0=initial_guess, maxfev=10000)
     except RuntimeError as e:
