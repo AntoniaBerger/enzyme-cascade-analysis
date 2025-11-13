@@ -1,0 +1,160 @@
+\documentclass[10pt]{beamer}
+
+% Theme und Farben
+\usetheme{Madrid}
+\usecolortheme{default}
+
+% Pakete
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+
+% Titel-Informationen
+\title{Enzym-Kaskaden-Analyse}
+\subtitle{Parameterbestimmung und Fehlerpfortpflanzung}
+\author{Antonia Berger}
+\date{17. November 2025}
+
+% Logo (optional - auskommentiert, da Pfad möglicherweise nicht existiert)
+% \logo{\includegraphics[height=1cm]{logo.png}}
+
+\begin{document}
+
+% Titelfolie
+\begin{frame}
+    \titlepage
+\end{frame}
+\section{Einleitung}
+\begin{frame}{"Was bisher geschah"}
+    \only<1>{\begin{figure}
+            \centering
+            \includegraphics[width=0.7\linewidth]{Figure/Aufbruch_Zusammenfassung(1).png}
+        \end{figure}}
+    \begin{itemize}
+        \item Modellierung nicht linearer Austausch­raten zwischen flüssig-flüssig Phasen
+        \item Rechnen von Austauschraten und Reactionen im equilibrierten Zustand
+    \end{itemize}
+\end{frame}
+\begin{frame}{Überblick}
+     \only<1>{\begin{figure}
+            \centering
+            \includegraphics[width=0.7\linewidth]{Figure/Aufbruch_Zusammenfassung(1).png}
+        \end{figure}}
+    \only<2>{\begin{figure}
+            \centering
+            \includegraphics[width=0.7\linewidth]{Figure/Aufbruch_Realität.png}
+    \end{figure}}
+    \textbf{Fokus Shift:}
+    Vom Downstream Prozess zum Upstream Prozess
+    \begin{itemize}
+        \item Enzymkinetik
+        \item Parameterbestimmung
+        \item Digitaler Zwilling von Bioreaktoren
+    \end{itemize}
+\end{frame}
+\section{Enzymkinetik}
+\begin{frame}{Modellierung der Enzymkinetik}
+    \begin{itemize}
+        \item Multi Substrat Michaelis Menten Kinetik
+        \item Jede Componente kann als Substrat und Inhibitor wirken
+    \end{itemize}
+    \begin{figure}
+            \centering
+            \includegraphics[width=0.7\linewidth]{Figure/mMM_mInh.png}
+    \end{figure}
+
+\end{frame}
+\begin{frame}{Parameterbestimmung}
+    \begin{figure}
+            \centering
+            \includegraphics[width=1\linewidth]{Figure/Reaktions_kaskade.png}
+    \end{figure}
+    \begin{itemize}
+        \item Mit Julian zusammen
+        \item Gegeben Daten von Enzymkinetik Experimenten
+        \item Analyse von der Parameterbestimmung mit beruecksichtigung Messfehlern
+    \end{itemize}
+    \vfill
+    \textbf{Frage:} Wie gut sind meine Parameterbestimmungen unter Berücksichtigung von Messfehlern?
+\end{frame}
+\begin{frame}{Parameterschätzung aus kinetischen Daten}
+\begin{minipage}{0.45\textwidth}
+    \begin{figure}
+        \centering
+        \includegraphics[width=1.0\linewidth]{figure/curve_fit.png}
+        \label{fig:enter-label}
+    \end{figure}
+\end{minipage}
+\hspace{1cm}
+\begin{minipage}{0.45\textwidth}
+\centering
+     \begin{block}{Anpassungsparameter}
+        Annahme:
+       \begin{equation*}
+           y_i - f(x_i,\theta) =   \varepsilon_i \text{ mit } \varepsilon_i \sim N(0,\sigma_i^2).
+       \end{equation*}
+       Finde $ \theta$ so dass 
+       \begin{equation*}
+           \min_{\theta} \sum_i ((f(x_i,\theta) - y_i)/ \sigma_i)^2
+       \end{equation*}
+   \end{block}
+\end{minipage}
+\begin{block}{Problem 1}
+    Zwei Substrat Model mit Daten der Einzelsubstrat Kinetik zu fitten -> Potentiell schrierige Parameterschätzungen.
+\end{block}
+\begin{block}{Problem 2}
+   Der fehler $y_i - f(x_i,\theta)$ ist nicht der direkte Messfehler, da $y_i$ in einem experimentellen Arbeitsablauf bestimmt wird.
+\end{block}
+\end{frame}
+\begin{frame}{Berechnung von Reaktionsraten aus Plattenleserdaten}
+    \only<1>{\begin{figure}
+        \centering
+        \includegraphics[width=0.7\linewidth]{figure/PR_workflow.jpeg}
+        \label{fig:enter-label}
+    \end{figure}}
+    \only<2>{\begin{figure}
+        \centering
+        \includegraphics[width=0.7\linewidth]{figure/PR_workflow_with_error.jpeg}
+        \label{fig:enter-label}
+    \end{figure}}\pause
+    \begin{block}{Fehlerquellen}
+        \begin{itemize}
+            \item Kalibrierungsfehler $\rightarrow$ Fehler bei der Berechnung von Reaktionsraten
+            \item Pipettierfehler $\rightarrow$ Konzentrationsfehler
+            \item Messfehler im Plattenleser $\rightarrow$ Fluoreszenzfehler
+        \end{itemize}
+    \end{block}
+\end{frame}
+\begin{frame}{Monte-Carlo-Bootstrap}
+    \begin{block}{Ansatz}
+    \begin{itemize}
+        \item Implementierung eines Parameterschätzskripts, das verschiedene Arten von Fehlerquellen berücksichtigt
+        \item Verwendung von Monte-Carlo-Bootstrap zur Schätzung von Parameterverteilungen
+        \item Vergleich verschiedener Fehlermodelle und deren Einfluss auf Parameterverteilungen
+    \end{itemize}
+    \end{block}
+\end{frame}
+\begin{frame}{Ergebnisse Reaction 1 und 3}
+    
+\end{frame}
+\begin{frame}{Ergebnisse Reaction 2}
+
+\end{frame}
+\section{Digitaler Zwilling}
+\begin{frame}{PioReactor}
+    \begin{itemize}
+        \item Programmierbare Bioreaktor Plattform
+        \item Ziel: Messen Modellieren Regeln mit MPC und MHE
+        \item Just Starte: Mit Tobias Process aufsetzten
+        \item Mit Jannis Messdaten in model integrieren
+    \end{itemize}
+\end{frame}
+
+
+\end{document}

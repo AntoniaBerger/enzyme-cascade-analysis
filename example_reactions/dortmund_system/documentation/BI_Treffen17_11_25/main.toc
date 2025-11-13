@@ -1,0 +1,4 @@
+\babel@toc {ngerman}{}\relax 
+\beamer@sectionintoc {1}{Einleitung}{2}{0}{1}
+\beamer@sectionintoc {2}{Enzymkinetik}{5}{0}{2}
+\beamer@sectionintoc {3}{Digitaler Zwilling}{13}{0}{3}
