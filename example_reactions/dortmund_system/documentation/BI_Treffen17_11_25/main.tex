@@ -50,25 +50,58 @@
             \centering
             \includegraphics[width=0.7\linewidth]{Figure/Aufbruch_Realität.png}
     \end{figure}}
-    \textbf{Fokus Shift:}
-    Vom Downstream Prozess zum Upstream Prozess
     \begin{itemize}
-        \item Enzymkinetik
-        \item Parameterbestimmung
-        \item Digitaler Zwilling von Bioreaktoren
+        \item Enzymkinetik Modellierung in CADET
+        \item Parameterbestimmung unter Berücksichtigung von Messfehlern
+        \item PioReactor
     \end{itemize}
 \end{frame}
 \section{Enzymkinetik}
 \begin{frame}{Modellierung der Enzymkinetik}
-    \begin{itemize}
-        \item Multi Substrat Michaelis Menten Kinetik
-        \item Jede Componente kann als Substrat und Inhibitor wirken
-    \end{itemize}
-    \begin{figure}
+    \only<1>{\begin{figure}
             \centering
-            \includegraphics[width=0.7\linewidth]{Figure/mMM_mInh.png}
+            \includegraphics[width=1\linewidth]{Figure/Reaktions_kaskade.png}
     \end{figure}
 
+       \small{ \begin{align*}
+            r_1 &= \frac{V_{max1} [PD] [NAD]}{(K_{m11} + [PD])(K_{m12} + [NAD])}\\
+            r_2 &= \frac{V_{max2} [NADH][HD]}{(K_{m21}(1+\frac{[PD]}{Ki}) + [HD]) (K_{m22} + [NADH])}\\
+            r_3 &= \frac{V_{max1} [HD] [NAD]}{(K_{m31} + [HD])(K_{m32} + [NAD])}\\
+        \end{align*}}
+    }
+    \only<2-3>{
+    \begin{minipage}{0.45\textwidth}
+    \begin{itemize}
+        \item Multi Substrat Michaelis Menten Kinetik
+        \item Verschiedene Inhibitor Typen
+        \item In CADET implementiert \\
+        $ \to $ In verschiednen Pioprocesse anwendbar \\
+        $ \to $ Verwendbar mit anderen Reaktionsmodellen \\
+        $ \to $ Sensitivitätsanalyse möglich
+    \end{itemize}
+    \end{minipage}
+    \begin{minipage}{0.45\textwidth}
+    \begin{figure}
+            \centering
+            \includegraphics[width=1.0\linewidth]{Figure/mMM_mInh.png}
+    \end{figure}
+    \end{minipage}
+
+    \begin{equation*}
+        \nu_{j} = v_{\mathrm{max},j} \prod_{i = 1}^{N_{sub,j}} \nu_{i,j} = v_{\mathrm{max},j} \prod_{i = 1}^{N_{sub,j}} \frac{ c_{i,j}}{K_{\mathrm{M}_{i,j}} + c_{i,j}}
+    \end{equation*}}
+    
+    \only<3>{\begin{block}{Zum Beispiel: Kompetitive Inhibitor}
+        \begin{equation*}
+        \only<3>{\nu_{i,j} =  \frac{c_{i,j}}{K_{\mathrm{M}_{i,j}}\,(1 + \sum_{k \in \mathcal{I}_{i,j}} \frac{c_{k}}{K^{c}_{I_{k}}}) + c_{i,j}}}
+        \end{equation*}
+    \end{block}}
+    \only<4>{
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.7\linewidth]{Figure/EnzymKaskadeModelvsCadet.png}        
+        \end{figure}
+    }
 \end{frame}
 \begin{frame}{Parameterbestimmung}
     \begin{figure}
@@ -77,68 +110,76 @@
     \end{figure}
     \begin{itemize}
         \item Mit Julian zusammen
-        \item Gegeben Daten von Enzymkinetik Experimenten
+        \item Gegeben Roh-Daten von Enzymkinetik Experimenten
         \item Analyse von der Parameterbestimmung mit beruecksichtigung Messfehlern
     \end{itemize}
     \vfill
     \textbf{Frage:} Wie gut sind meine Parameterbestimmungen unter Berücksichtigung von Messfehlern?
 \end{frame}
 \begin{frame}{Parameterschätzung aus kinetischen Daten}
-\begin{minipage}{0.45\textwidth}
+\begin{minipage}{0.4\textwidth}
     \begin{figure}
         \centering
         \includegraphics[width=1.0\linewidth]{figure/curve_fit.png}
         \label{fig:enter-label}
     \end{figure}
 \end{minipage}
-\hspace{1cm}
-\begin{minipage}{0.45\textwidth}
+\hspace{0.5cm}
+\begin{minipage}{0.50\textwidth}
 \centering
-     \begin{block}{Anpassungsparameter}
-        Annahme:
+     \begin{block}{Experimentaler Aufblauf}
        \begin{equation*}
-           y_i - f(x_i,\theta) =   \varepsilon_i \text{ mit } \varepsilon_i \sim N(0,\sigma_i^2).
+           \min_{\theta} \sum_i \left(\frac{f(c_i,\theta) - r_i}{ \sigma_i}\right)^2
        \end{equation*}
-       Finde $ \theta$ so dass 
-       \begin{equation*}
-           \min_{\theta} \sum_i ((f(x_i,\theta) - y_i)/ \sigma_i)^2
-       \end{equation*}
+       \begin{itemize}
+        \item $c_i$: Konzentrationsmessung zum Zeitpunkt $i$
+        \item $f(c_i,\theta) = \frac{c_i \cdot Vmax}{c_i + K_m}$: Modelfunktion
+        \item $\theta = (Vmax, K_m)$: Parameter
+        \item $\sigma_i$: Standardabweichung der Messung
+       \end{itemize}
    \end{block}
 \end{minipage}
-\begin{block}{Problem 1}
-    Zwei Substrat Model mit Daten der Einzelsubstrat Kinetik zu fitten -> Potentiell schrierige Parameterschätzungen.
-\end{block}
-\begin{block}{Problem 2}
-   Der fehler $y_i - f(x_i,\theta)$ ist nicht der direkte Messfehler, da $y_i$ in einem experimentellen Arbeitsablauf bestimmt wird.
+\begin{block}{Beobachtung}
+    Durch den Experimenten Aublauf können verschiedene Arten von Messfehlern auftreten.
 \end{block}
 \end{frame}
-\begin{frame}{Berechnung von Reaktionsraten aus Plattenleserdaten}
+\begin{frame}{Berechnung von Reaktionsraten}
     \only<1>{\begin{figure}
-        \centering
-        \includegraphics[width=0.7\linewidth]{figure/PR_workflow.jpeg}
-        \label{fig:enter-label}
+            \centering
+            \includegraphics[width=0.7\linewidth]{Figure/detailierterWF1.png}
     \end{figure}}
     \only<2>{\begin{figure}
-        \centering
-        \includegraphics[width=0.7\linewidth]{figure/PR_workflow_with_error.jpeg}
-        \label{fig:enter-label}
-    \end{figure}}\pause
-    \begin{block}{Fehlerquellen}
-        \begin{itemize}
-            \item Kalibrierungsfehler $\rightarrow$ Fehler bei der Berechnung von Reaktionsraten
-            \item Pipettierfehler $\rightarrow$ Konzentrationsfehler
-            \item Messfehler im Plattenleser $\rightarrow$ Fluoreszenzfehler
-        \end{itemize}
+            \centering
+            \includegraphics[width=0.7\linewidth]{Figure/detailierterWF2.png}
+    \end{figure}}
+    \begin{block}{Raten Berechnung}
+        \begin{equation*}
+            r = A [U/mg] = \frac{ m_{od} [A_{340}/s]\cdot 60 s/min \cdot \phi_{well} \cdot \phi_{prod} }{ m_{cal} [ A_{340} \mu /M] \cdot c_{prod}[mg/L]}
+        \end{equation*}
     \end{block}
 \end{frame}
-\begin{frame}{Monte-Carlo-Bootstrap}
+\begin{frame}{Fehler Beruecksichtigung}
+    \begin{minipage}{0.6\textwidth}
     \begin{block}{Ansatz}
     \begin{itemize}
-        \item Implementierung eines Parameterschätzskripts, das verschiedene Arten von Fehlerquellen berücksichtigt
-        \item Verwendung von Monte-Carlo-Bootstrap zur Schätzung von Parameterverteilungen
-        \item Vergleich verschiedener Fehlermodelle und deren Einfluss auf Parameterverteilungen
+        \item Fehler kategorisiert
+        \begin{itemize}
+            \item Pipettierfehler $\rightarrow$ Konzentrationsfehler
+            \item Messfehler im Plate Reader $\rightarrow$ Fluoreszenzfehler und Zeitfehler
+        \end{itemize}
+        \item Annahme: Fehler in einer Kategorie sind normalverteilt und unabhängig
+        \item Parameterbestimmung aus Rohdaten wird der Workflow mit den jeweiligen Fehlern nachgebildet
+        \item Monte Carlo Simulation zur Fehlerfortpflanzung
     \end{itemize}
     \end{block}
+    \end{minipage}
+    \begin{minipage}{0.35\textwidth}
+    \begin{figure}
+            \centering
+            \includegraphics[width=0.7\linewidth]{Figure/Progamm_skizze.png}
+    \end{figure}
+    \end{minipage}
+  
 \end{frame}
 \begin{frame}{Ergebnisse Reaction 1 und 3}
     
@@ -146,15 +187,57 @@
 \begin{frame}{Ergebnisse Reaction 2}
 
 \end{frame}
-\section{Digitaler Zwilling}
-\begin{frame}{PioReactor}
+\begin{frame}{Nächste Schritte}
     \begin{itemize}
-        \item Programmierbare Bioreaktor Plattform
-        \item Ziel: Messen Modellieren Regeln mit MPC und MHE
-        \item Just Starte: Mit Tobias Process aufsetzten
-        \item Mit Jannis Messdaten in model integrieren
+        \item Ergebnisse analysieren diskutieren und adaptieren
+        \begin{itemize}
+            \item Sind die Fehlerannahmen realistisch?
+            \item Sind die Fehlergrößen realistisch?
+            \item Mehrdimensionale Parameterabschätzung
+        \end{itemize}
+        \item Enzyminaktivierung integrieren
     \end{itemize}
 \end{frame}
+\section{Digitaler Zwilling}
+\begin{frame}{AUSBLICK: PioReactor}
+    \textbf{Ziel}: Messen, Modellieren, Regeln in CADET \\
+    mit Model Predictive Control und Moving Horizon Estimation
+    \only<1>{\begin{figure}
+            \centering
+            \includegraphics[width=0.7\linewidth]{Figure/MPC_und_MPE.png}
+            \caption{Aus Vorlesungsskript siehe [1]}
+    \end{figure}}
+     \only<2->{
+    \begin{minipage}{0.5\textwidth}
+        \vspace{1.5cm}
+        \begin{itemize}
+        \item Programmierbare Bioreaktor als Prototype
+        \item Tobias Jülch (IB ) Test Process aufsetzten
+        \item Jannis Bergmann (Student) Datenmanagement und CADET Schnittstelle entwickeln
+    \end{itemize}
+    \end{minipage}}
+    \begin{minipage}{0.4\textwidth}
+        \vspace{1.5cm}
+        \only<2>{
+        \begin{figure}
+            \centering
+            \includegraphics[width=1.0\linewidth]{Figure/PioReactor.jpg}
+        \end{figure}}
+        \only<3>{
+        \begin{figure}
+            \centering
+            \includegraphics[width=1.0\linewidth]{Figure/CADET-LivePioreactor.drawio.png}
+        \end{figure}}
 
-
+    \end{minipage}
+       
+    
+\end{frame}
+\begin{frame}{Literatur}
+    \begin{thebibliography}{1}
+    \bibitem{ebenbauer2022}
+    [1] C. Ebenbauer and M. Gharbi, \emph{Lectures on RECEDING HORIZON OPTIMAL CONTROL}, 2022.
+    \end{thebibliography}
+    
+\end{frame}
 \end{document}

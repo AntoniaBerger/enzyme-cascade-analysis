@@ -21,7 +21,7 @@ def estimate_parameters_standard(data, model_func, initial_guess):
         
     return popt, pcov
 
-def estimate_parameters_adaptive(data, model_func, substrate, initial_guess, method='multi_start'):
+def estimate_parameters_adaptive(data, model_func, substrate, initial_guess, method=''):
     x_data = []
 
     if len(substrate) == 1:
@@ -79,14 +79,13 @@ def _multi_start_fit(x_data, y_data, model_func, initial_guess, n_starts=10):
     
     return best_result
 
-
 def _standard_fitting(x_data, y_data, model_func, initial_guess):
     try:
         popt, pcov = opt.curve_fit(
             model_func, x_data, y_data, 
             p0=initial_guess, 
             maxfev=10000,
-            bounds=(0, 500)  # Beispielhafte Bounds
+            bounds=(0, 200)  # Beispielhafte Bounds
         )
     except RuntimeError as e:
         print(f"Error occurred during curve fitting: {e}")

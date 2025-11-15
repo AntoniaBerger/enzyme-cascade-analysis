@@ -23,11 +23,12 @@ def monte_carlo_parameter_estimation(data:pd.DataFrame,
                                      num_iterations=1000):
     estimated_params = []
     local_data = data.copy()
+    local_cal_data = cal_data.copy()
 
     for _ in range(num_iterations):
         
         # Add Gaussian noise to the data
-        data_noisy = noise_function(local_data, cal_data, substrate, cal_param, noise_level)
+        data_noisy = noise_function(local_data, local_cal_data, substrate, cal_param, noise_level)
 
         # Estimate parameters using the noisy data
         popt, _ = estimate_parameters_adaptive(data_noisy, model_func,substrate, initial_guess =initial_guess, method=estimate_method)

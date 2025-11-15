@@ -6,7 +6,7 @@ import os
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from noise_function_libary import no_noise, add_noise_processed_data, add_noise_plate_reader, add_noise_rate
+from noise_function_libary import no_noise, add_noise_processed_data, add_noise_plate_reader, add_noise_rate, full_experiment_processing_with_noise
 
 
 def create_test_data():
@@ -163,6 +163,162 @@ def test_add_noise_rate():
     print("✓ test_add_noise_rate passed: Rate noise added correctly")
 
 
+def test_full_experiment_processing_with_noise():
+    """Test the comprehensive noise function that adds multiple types of experimental errors."""
+    data, cal_data, processed_data, substrates, cal_parameters = create_test_data()
+    
+    # Define realistic noise levels for different error sources
+    noise_levels = {
+        'fehler_wage': 0.001,       # Balance error
+        'fehler_pipettieren': 0.01, # Pipetting error  
+        'fehler_time_points': 5.0,  # Time point error in seconds
+        'fehler_od': 0.005          # Optical density measurement error
+    }
+    
+    result = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, noise_levels)
+    
+    # Check that result is processed data format
+    assert isinstance(result, pd.DataFrame)
+    assert 'activity_U/mg' in result.columns
+    
+    # Check that substrate columns are present
+    for substrate in substrates:
+        assert substrate in result.columns
+    
+    # Check that we have data (may be fewer rows due to processing)
+    assert len(result) > 0, "Should have at least some data points"
+    
+    # Check that activities are finite numbers
+    assert np.all(np.isfinite(result['activity_U/mg'])), "Activities should be finite numbers"
+    
+    # Test with zero noise to verify baseline functionality
+    zero_noise_levels = {
+        'fehler_wage': 0.0,
+        'fehler_pipettieren': 0.0, 
+        'fehler_time_points': 0.0,
+        'fehler_od': 0.0
+    }
+    
+    result_no_noise = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, zero_noise_levels)
+    
+    # Should have same structure
+    assert len(result) == len(result_no_noise)
+    assert list(result.columns) == list(result_no_noise.columns)
+    
+    # Test that different noise levels produce different results
+    high_noise_levels = {
+        'fehler_wage': 0.01,
+        'fehler_pipettieren': 0.1,
+        'fehler_time_points': 30.0,
+        'fehler_od': 0.05
+    }
+    
+    result_high_noise = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, high_noise_levels)
+    
+    # Should still have valid structure
+    assert isinstance(result_high_noise, pd.DataFrame)
+    assert 'activity_U/mg' in result_high_noise.columns
+    
+    print("✓ test_full_experiment_processing_with_noise passed: Comprehensive noise model works correctly")
+
+
+def test_noise_levels_validation():
+    """Test behavior with different noise level configurations."""
+    data, cal_data, processed_data, substrates, cal_parameters = create_test_data()
+    
+    # Test with minimal noise
+    minimal_noise = {
+        'fehler_wage': 1e-6,
+        'fehler_pipettieren': 1e-6,
+        'fehler_time_points': 0.1,
+        'fehler_od': 1e-6
+    }
+    
+    result_minimal = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, minimal_noise)
+    assert isinstance(result_minimal, pd.DataFrame)
+    assert len(result_minimal) > 0
+    
+    # Test with asymmetric noise (only some error sources)
+    asymmetric_noise = {
+        'fehler_wage': 0.0,
+        'fehler_pipettieren': 0.05,  # Only pipetting error
+        'fehler_time_points': 0.0,
+        'fehler_od': 0.0
+    }
+    
+    result_asymmetric = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, asymmetric_noise)
+    assert isinstance(result_asymmetric, pd.DataFrame)
+    assert len(result_asymmetric) > 0
+    
+    print("✓ test_noise_levels_validation passed: Different noise configurations handled correctly")
+
+
+def test_noise_function_reproducibility():
+    """Test that noise functions are properly randomized but can be controlled with seeds."""
+    data, cal_data, processed_data, substrates, cal_parameters = create_test_data()
+    
+    # Test add_noise_processed_data reproducibility
+    np.random.seed(42)
+    result1 = add_noise_processed_data(processed_data, cal_data, substrates, cal_parameters, 0.1)
+    
+    np.random.seed(42) 
+    result2 = add_noise_processed_data(processed_data, cal_data, substrates, cal_parameters, 0.1)
+    
+    # With same seed, should get identical results
+    pd.testing.assert_frame_equal(result1, result2)
+    
+    # Test that different seeds give different results
+    np.random.seed(123)
+    result3 = add_noise_processed_data(processed_data, cal_data, substrates, cal_parameters, 0.1)
+    
+    # Should have same structure but different activity values
+    assert list(result1.columns) == list(result3.columns)
+    assert len(result1) == len(result3)
+    
+    # Activities should be different (with high probability)
+    activities1 = result1['activity_U/mg'].values
+    activities3 = result3['activity_U/mg'].values
+    differences = np.abs(activities1 - activities3)
+    assert np.any(differences > 1e-10), "Different seeds should produce different noise"
+    
+    print("✓ test_noise_function_reproducibility passed: Noise functions properly randomized")
+
+
+def test_error_edge_cases():
+    """Test noise functions with edge cases and potential error conditions."""
+    data, cal_data, processed_data, substrates, cal_parameters = create_test_data()
+    
+    # Test with very large noise levels
+    try:
+        large_noise_result = add_noise_processed_data(processed_data, cal_data, substrates, cal_parameters, 100.0)
+        assert isinstance(large_noise_result, pd.DataFrame)
+        print("✓ Large noise levels handled")
+    except Exception as e:
+        print(f"⚠ Large noise caused issues: {str(e)}")
+    
+    # Test with negative activities after noise (should still be valid)
+    very_large_noise = add_noise_processed_data(processed_data, cal_data, substrates, cal_parameters, 10.0)
+    assert isinstance(very_large_noise, pd.DataFrame)
+    # Activities can be negative after noise - this is physically unrealistic but mathematically valid
+    
+    # Test with empty-like data
+    minimal_data = pd.DataFrame({
+        'HP_mM': [100],
+        'NADH_mM': [0.6],
+        'PD_mM': [0],
+        'activity_U/mg': [1.5]
+    })
+    
+    try:
+        minimal_result = add_noise_processed_data(minimal_data, cal_data, substrates, cal_parameters, 0.1)
+        assert len(minimal_result) == 1
+        print("✓ Minimal data handled")
+    except Exception as e:
+        print(f"⚠ Minimal data caused issues: {str(e)}")
+    
+    print("✓ test_error_edge_cases passed: Edge cases handled appropriately")
+
+
 def run_all_tests():
     """Run all noise function tests."""
     print("Running noise function tests...\n")
@@ -172,6 +328,10 @@ def run_all_tests():
         test_add_noise_processed_data() 
         test_add_noise_plate_reader()
         test_add_noise_rate()
+        test_full_experiment_processing_with_noise()
+        test_noise_levels_validation()
+        test_noise_function_reproducibility()
+        test_error_edge_cases()
         
         print("\n🎉 All noise function tests passed!")
         

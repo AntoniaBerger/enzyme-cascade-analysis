@@ -3,7 +3,7 @@ import pandas as pd
 import pickle
 
 
-def save_results(data, parameter_names, dataset_name="monte_carlo_results"):
+def save_results(data, parameter_names, save_path="monte_carlo_results.csv"):
     """
     Save Monte Carlo results to a DataFrame.
 
@@ -16,10 +16,13 @@ def save_results(data, parameter_names, dataset_name="monte_carlo_results"):
     pd.DataFrame: DataFrame containing the Monte Carlo results.
     """
     df = pd.DataFrame(data, columns=parameter_names)
-    df.index.name = dataset_name
     
-    df.to_csv(f"Data/{dataset_name}_results.csv")
-    df.to_pickle(f"Data/{dataset_name}_results.pkl")
+    try:
+        df.to_csv(save_path)
+        df.to_pickle(save_path.replace('.csv', '.pkl'))
+        
+    except Exception as e:
+        print(f"Error saving results: {e}")
 
     return df
 

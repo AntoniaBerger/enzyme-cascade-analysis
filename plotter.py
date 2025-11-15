@@ -58,41 +58,50 @@ def corner_plot_monte_carlo_results(monte_carlo_results,parameters,save_to_file=
     data = monte_carlo_results[parameters].values
     figure = corner.corner(data, 
                           labels=parameters,
-                          title_kwargs={"fontsize": 12},
-                          title=title)
+                          title_kwargs={"fontsize": 12})
+    
+    # Add title to the figure
+    figure.suptitle(title, fontsize=14, fontweight='bold')
+    
     if save_to_file:
         figure.savefig(save_to_file)
 
     plt.show()
 
 
-def correlation_matrix_plot(monte_carlo_results,parameters,save_to_file="", titel="Parameter Correlation Matrix"):
+def correlation_matrix_plot(monte_carlo_results,parameters,save_to_file="", title="Parameter Correlation Matrix"):
     correlation_matrix = monte_carlo_results[parameters].corr()
 
     # Only show lower triangle and diagonal
     mask = np.triu(np.ones_like(correlation_matrix, dtype=bool), k=1)
     correlation_matrix_masked = np.ma.array(correlation_matrix, mask=mask)
 
-    fig, ax = plt.subplots()
-    cax = ax.matshow(correlation_matrix_masked, cmap='coolwarm')
+    fig, ax = plt.subplots(figsize=(8, 6))
+    cax = ax.matshow(correlation_matrix_masked, cmap='coolwarm', vmin=-1, vmax=1)
     fig.colorbar(cax)
 
+    # Set ticks and labels
     ax.set_xticks(np.arange(len(parameters)))
     ax.set_yticks(np.arange(len(parameters)))
-    ax.set_xticklabels(parameters)
+    ax.set_xticklabels(parameters, rotation=45, ha='left')
     ax.set_yticklabels(parameters)
 
+    # Add correlation values as text
     for i in range(len(parameters)):
         for j in range(len(parameters)):
             if not mask[i, j]:
-                text = ax.text(j, i, f"{correlation_matrix_masked[i, j]:.2f}",
-                            ha="center", va="center", color="w")
+                ax.text(j, i, f"{correlation_matrix_masked[i, j]:.2f}",
+                        ha="center", va="center", color="white", fontweight='bold')
 
-    ax.set_title(titel)
+    ax.set_title(title, pad=20, fontsize=14, fontweight='bold')
+    
+    # Move x-axis labels to bottom
+    ax.xaxis.set_ticks_position('bottom')
+    
     plt.tight_layout()
 
     if save_to_file:
-        plt.savefig(save_to_file)
+        plt.savefig(save_to_file, dpi=300, bbox_inches='tight')
 
     plt.show()
 
@@ -449,16 +458,213 @@ def compare_multiple_ellipses(monte_carlo_results_list, parameters, labels=None,
             print(f"     {parameters[0]} Verhältnis: {ratio_x:.3f}")
             print(f"     {parameters[1]} Verhältnis: {ratio_y:.3f}")
 
+def compare_corner_plots(monte_carlo_results_list, parameters, labels=None, 
+                        save_to_file="", title="Comparison of Corner Plots",
+                        true_values=None, colors=None, alpha=0.6):
+    """
+    Vergleicht Corner Plots für mehrere Monte Carlo Simulationen.
+    
+    Args:
+        monte_carlo_results_list: Liste von DataFrames mit Monte Carlo Ergebnissen
+        parameters: Liste von Parameternamen für den Corner Plot
+        labels: Liste von Labels für die Simulationen
+        save_to_file: Pfad zum Speichern des Plots
+        title: Titel des Plots
+        true_values: Wahre Parameter-Werte als Liste
+        colors: Liste von Farben für die Simulationen
+        alpha: Transparenz der Histogramme/Scatter (0.0-1.0)
+    """
+    n_simulations = len(monte_carlo_results_list)
+    
+    if labels is None:
+        labels = [f'Simulation {i+1}' for i in range(n_simulations)]
+    
+    if colors is None:
+        colors = plt.cm.tab10(np.linspace(0, 1, n_simulations))
+        # Konvertiere zu hex für corner.py
+        colors = [plt.matplotlib.colors.to_hex(c) for c in colors]
+    
+    # Erstelle den ersten Corner Plot
+    data1 = monte_carlo_results_list[0][parameters].values
+    figure = corner.corner(data1, 
+                          labels=parameters,
+                          title_kwargs={"fontsize": 12},
+                          color=colors[0],
+                          alpha=alpha,
+                          hist_kwargs={"density": True, "alpha": alpha})
+    
+    # Überlagere die anderen Simulationen
+    for i in range(1, n_simulations):
+        data_i = monte_carlo_results_list[i][parameters].values
+        corner.corner(data_i, 
+                     fig=figure,  # Verwende die existierende Figur
+                     labels=parameters,
+                     color=colors[i],
+                     alpha=alpha,
+                     hist_kwargs={"density": True, "alpha": alpha})
+    
+    # Füge wahre Werte hinzu falls verfügbar
+    if true_values is not None and len(true_values) >= len(parameters):
+        corner.overplot_lines(figure, true_values[:len(parameters)], color="black", linewidth=3)
+        corner.overplot_points(figure, [true_values[:len(parameters)]], marker="s", 
+                              color="black", markersize=50, markeredgewidth=2)
+
+    # Titel hinzufügen
+    figure.suptitle(title, fontsize=16, fontweight='bold', y=0.98)
+    
+    # Legende erstellen (manuell, da corner.py keine automatische Legende hat)
+    from matplotlib.lines import Line2D
+    legend_elements = []
+    for i, (label, color) in enumerate(zip(labels, colors)):
+        legend_elements.append(Line2D([0], [0], color=color, lw=4, alpha=alpha, label=label))
+    
+    if true_values is not None:
+        legend_elements.append(Line2D([0], [0], marker='s', color='black', 
+                                    linestyle='None', markersize=10, label='True Values'))
+    
+    # Platziere Legende außerhalb des Plots
+    figure.legend(handles=legend_elements, loc='center left', 
+                 bbox_to_anchor=(1.02, 0.5), fontsize=12)
+    
+    plt.tight_layout()
+    
+    if save_to_file:
+        figure.savefig(save_to_file, dpi=300, bbox_inches='tight')
+    
+    plt.show()
+    
+    # Numerische Zusammenfassung
+    print(f"\n{'='*60}")
+    print("CORNER PLOT VERGLEICH - ZUSAMMENFASSUNG")
+    print(f"{'='*60}")
+    
+    for i, (results, label) in enumerate(zip(monte_carlo_results_list, labels)):
+        data = results[parameters].values
+        means = np.mean(data, axis=0)
+        stds = np.std(data, axis=0)
+        
+        print(f"\n{i+1}. {label}:")
+        for j, param in enumerate(parameters):
+            print(f"   {param}: {means[j]:.4f} ± {stds[j]:.4f}")
+        
+        # Korrelationsmatrix
+        corr_matrix = np.corrcoef(data.T)
+        print("   Korrelationen:")
+        for j in range(len(parameters)):
+            for k in range(j+1, len(parameters)):
+                print(f"     {parameters[j]} - {parameters[k]}: {corr_matrix[j,k]:.3f}")
+
+
+def compare_corner_plots_side_by_side(monte_carlo_results_list, parameters, labels=None,
+                                     save_to_file="", title="Side-by-Side Corner Plots",
+                                     true_values=None, figsize_per_plot=(8, 8)):
+    """
+    Erstellt Corner Plots nebeneinander für besseren Vergleich.
+    
+    Args:
+        monte_carlo_results_list: Liste von DataFrames mit Monte Carlo Ergebnissen
+        parameters: Liste von Parameternamen für den Corner Plot
+        labels: Liste von Labels für die Simulationen
+        save_to_file: Pfad zum Speichern des Plots
+        title: Titel des Gesamtplots
+        true_values: Wahre Parameter-Werte als Liste
+        figsize_per_plot: Größe jedes Corner Plots (Breite, Höhe)
+    """
+    n_simulations = len(monte_carlo_results_list)
+    
+    if labels is None:
+        labels = [f'Simulation {i+1}' for i in range(n_simulations)]
+    
+    # Berechne Layout
+    n_cols = min(3, n_simulations)  # Maximal 3 Spalten
+    n_rows = (n_simulations + n_cols - 1) // n_cols
+    
+    # Erstelle Subplots
+    fig = plt.figure(figsize=(figsize_per_plot[0] * n_cols, figsize_per_plot[1] * n_rows))
+    fig.suptitle(title, fontsize=20, fontweight='bold', y=0.98)
+    
+    colors = plt.cm.tab10(np.linspace(0, 1, n_simulations))
+    corner_figures = []
+    
+    for i, (results, label, color) in enumerate(zip(monte_carlo_results_list, labels, colors)):
+        data = results[parameters].values
+        
+        # Erstelle Subplot für diesen Corner Plot
+        row = i // n_cols
+        col = i % n_cols
+        
+        # Corner Plot in Subplot
+        subplot_ax = plt.subplot(n_rows, n_cols, i + 1)
+        
+        # Erstelle separaten Corner Plot
+        corner_fig = corner.corner(data,
+                                  labels=parameters,
+                                  color=plt.matplotlib.colors.to_hex(color),
+                                  title_kwargs={"fontsize": 10},
+                                  label_kwargs={"fontsize": 9},
+                                  hist_kwargs={"density": True, "alpha": 0.7})
+        
+        # Wahre Werte hinzufügen
+        if true_values is not None:
+            corner.overplot_lines(corner_fig, true_values, color="red", linewidth=2)
+            corner.overplot_points(corner_fig, true_values[None], marker="s", 
+                                  color="red", markersize=50, markeredgewidth=1)
+        
+        # Titel für Subplot
+        corner_fig.suptitle(f"{label}", fontsize=14, fontweight='bold')
+        
+        corner_figures.append(corner_fig)
+        
+        # Schließe die separate Figur, aber behalte die Daten
+        # (corner.py erstellt automatisch neue Figuren)
+    
+    plt.tight_layout()
+    
+    if save_to_file:
+        # Speichere die letzte erstellte Figur
+        plt.savefig(save_to_file, dpi=300, bbox_inches='tight')
+    
+    plt.show()
+    
+    # Statistischer Vergleich
+    print(f"\n{'='*80}")
+    print("SIDE-BY-SIDE CORNER PLOTS - STATISTISCHER VERGLEICH")
+    print(f"{'='*80}")
+    
+    # Berechne KL-Divergenz zwischen den Verteilungen (vereinfacht)
+    for i in range(n_simulations):
+        for j in range(i+1, n_simulations):
+            print(f"\nVergleich: {labels[i]} vs {labels[j]}")
+            
+            data1 = monte_carlo_results_list[i][parameters].values
+            data2 = monte_carlo_results_list[j][parameters].values
+            
+            # Berechne Unterschiede in Mittelwerten und Standardabweichungen
+            means1, means2 = np.mean(data1, axis=0), np.mean(data2, axis=0)
+            stds1, stds2 = np.std(data1, axis=0), np.std(data2, axis=0)
+            
+            for k, param in enumerate(parameters):
+                mean_diff = abs(means1[k] - means2[k])
+                std_ratio = stds2[k] / stds1[k] if stds1[k] > 0 else float('inf')
+                print(f"  {param}:")
+                print(f"    Mittelwert-Differenz: {mean_diff:.4f}")
+                print(f"    Std-Verhältnis: {std_ratio:.3f}")
+
+
 if __name__ == "__main__":
 
     # Example usage with synthetic data
     from artifical_data import reaction1_synthetic_data
     from monte_carlo_estimator import monte_carlo_parameter_estimation
 
-    monte_carlo_results1 = pd.read_csv(r"C:\Users\berger\Documents\Projekts\enzyme-cascade-analysis\example_reactions\dortmund_system\results\experimental_reaction2_HP_noisy_plate_reader_results.csv")    
+    monte_carlo_results1 = pd.read_csv(r"C:\Users\berger\Documents\Projekts\enzyme-cascade-analysis\example_reactions\dortmund_system\results\experimental_reaction2_NADH_noisy_noisey_rate.csv")    
 
     monte_carlo_results2 = pd.read_csv(r"C:\Users\berger\Documents\Projekts\enzyme-cascade-analysis\example_reactions\dortmund_system\results\experimental_reaction2_NADH_noisy_plate_reader_results.csv")
 
-    # Create correlation matrix plot
-    compare_error_ellipses(monte_carlo_results1 , monte_carlo_results2, 
-                          parameters=['Vmax', 'Km1'])
+    # Create corner plot comparison with proper labels
+    compare_corner_plots([monte_carlo_results1, monte_carlo_results2],
+                        parameters=['Vmax', 'Km1'],
+                        labels=['Noisy Rate', 'Noisy Plate Reader'],
+                        title="Comparison: Noisy Rate vs Plate Reader")
+                        
+
