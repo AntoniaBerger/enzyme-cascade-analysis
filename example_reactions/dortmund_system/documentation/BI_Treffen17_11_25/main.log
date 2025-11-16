@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2024.6.3)  15 NOV 2025 19:49
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex 2024.6.3)  16 NOV 2025 13:17
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -844,31 +844,33 @@ Package pdftex.def Info: Figure/Progamm_skizze.png  used on input line 183.
 
 ] [16
 
+] [17
+
 ]
-<Figure/MPC_und_MPE.png, id=588, 445.665pt x 212.59425pt>
+<Figure/MPC_und_MPE.png, id=615, 445.665pt x 212.59425pt>
 File: Figure/MPC_und_MPE.png Graphic file (type png)
 <use Figure/MPC_und_MPE.png>
-Package pdftex.def Info: Figure/MPC_und_MPE.png  used on input line 235.
+Package pdftex.def Info: Figure/MPC_und_MPE.png  used on input line 237.
 (pdftex.def)             Requested size: 240.93567pt x 114.93217pt.
- [17
-
- <./Figure/MPC_und_MPE.png>]
-<Figure/PioReactor.jpg, id=617, 4047.12pt x 3035.34pt>
-File: Figure/PioReactor.jpg Graphic file (type jpg)
-<use Figure/PioReactor.jpg>
-Package pdftex.def Info: Figure/PioReactor.jpg  used on input line 235.
-(pdftex.def)             Requested size: 137.67603pt x 103.23724pt.
  [18
 
- <./Figure/PioReactor.jpg>]
-<Figure/CADET-LivePioreactor.drawio.png, id=643, 828.84656pt x 452.4403pt>
-File: Figure/CADET-LivePioreactor.drawio.png Graphic file (type png)
-<use Figure/CADET-LivePioreactor.drawio.png>
-Package pdftex.def Info: Figure/CADET-LivePioreactor.drawio.png  used on input line 235.
-(pdftex.def)             Requested size: 137.67603pt x 75.14648pt.
+ <./Figure/MPC_und_MPE.png>]
+<Figure/PioReactor.jpg, id=644, 4047.12pt x 3035.34pt>
+File: Figure/PioReactor.jpg Graphic file (type jpg)
+<use Figure/PioReactor.jpg>
+Package pdftex.def Info: Figure/PioReactor.jpg  used on input line 237.
+(pdftex.def)             Requested size: 137.67603pt x 103.23724pt.
  [19
 
- <./Figure/CADET-LivePioreactor.drawio.png>] [20
+ <./Figure/PioReactor.jpg>]
+<Figure/CADET-LivePioreactor.drawio.png, id=671, 828.84656pt x 452.4403pt>
+File: Figure/CADET-LivePioreactor.drawio.png Graphic file (type png)
+<use Figure/CADET-LivePioreactor.drawio.png>
+Package pdftex.def Info: Figure/CADET-LivePioreactor.drawio.png  used on input line 237.
+(pdftex.def)             Requested size: 137.67603pt x 75.14648pt.
+ [20
+
+ <./Figure/CADET-LivePioreactor.drawio.png>] [21
 
  <C:/Users/berger/AppData/Local/Programs/MiKTeX/tex/latex/beamer/beamericonarticle.pdf>]
 \tf@nav=\write6
@@ -889,17 +891,17 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: 6152951613BA8D5FE746C4C6B4A2B06E;332.
  ) 
 Here is how much of TeX's memory you used:
- 23388 strings out of 474485
- 459686 string characters out of 5743263
+ 23392 strings out of 474485
+ 459721 string characters out of 5743263
  1941542 words of memory out of 5000000
- 45125 multiletter control sequences out of 15000+600000
+ 45127 multiletter control sequences out of 15000+600000
  577334 words of font info for 79 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  128i,15n,123p,505b,869s stack positions out of 10000i,1000n,20000p,200000b,200000s
  <C:\Users\berger\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ecsi1000.pk> <C:\Users\berger\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ecsx1000.pk> <C:\Users\berger\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ecss1200.pk> <C:\Users\berger\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ecss0700.pk> <C:\Users\berger\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ecrm0700.pk> <C:\Users\berger\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ecss0900.pk> <C:\Users\berger\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ecss0600.pk> <C:\Users\berger\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ecss0500.pk> <C:\Users\berger\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ecss1000.pk> <C:\Users\berger\AppData\Local\MiKTeX\fonts/pk/ljfour/jknappen/ec/dpi600\ecss1440.pk><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmex10.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi10.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi5.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmmi7.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmss10.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmss8.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmss9.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmssi10.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmssi8.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmssi9.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy10.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy7.pfb><C:/Users/berger/AppData/Local/Programs/MiKTeX/fonts/type1/public/amsfonts/cm/cmsy9.pfb>
-Output written on main.pdf (20 pages, 2639194 bytes).
+Output written on main.pdf (21 pages, 2644646 bytes).
 PDF statistics:
- 1055 PDF objects out of 1200 (max. 8388607)
- 46 named destinations out of 1000 (max. 500000)
+ 1082 PDF objects out of 1200 (max. 8388607)
+ 48 named destinations out of 1000 (max. 500000)
  403 words of extra memory for PDF output out of 10000 (max. 10000000)
 

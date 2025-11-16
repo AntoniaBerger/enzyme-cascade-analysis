@@ -22,16 +22,19 @@ PROCESSED_DATA_PATH = r"C:\\Users\\berger\\Documents\\Projekts\\enzyme-cascade-a
 # results path
 RESULTS_PATH = r"C:\\Users\\berger\\Documents\\Projekts\\enzyme-cascade-analysis\\example_reactions\\dortmund_system\\results"
 
- # define model
+# set seed 
+np.random.seed(42)
+
+# define model
     
-parameters = ['Vmax', 'Km1',"Km2"]
+parameters = ['Vmax', 'Km1', 'Km2']
 substrates = ["PD_mM"]
 
 def michaelis_menten(S, *parameters):
     S1 = S
     Vmax, Km1, Km2 = parameters
 
-    return (Vmax * S1 * 5) / ((Km1 + S1)*(5+ Km2))
+    return (Vmax * S1 * 5) / ((Km1 + S1) * (Km2 + 5))
 
  # Perform Monte Carlo parameter estimation with experimental data
 
@@ -40,19 +43,19 @@ cal_data = pd.read_csv(os.path.join(EXPERIMENTAL_DATA_PATH, "NADH_Kalibriergerad
 
 cal_parameters = {
     "Vf_well": 10.0,  # mL
-    "Vf_prod": 1.0,  # 
+    "Vf_prod": 1.0,  # mL
     "c_prod": 2.2108    # mg/mL
 }
 
-initial_guess = [0.1, 70, 3]
+initial_guess = [0.1, 80, 1]
 
-noise_level = noise_level = {
-    'fehler_wage': 0.01,
-    'fehler_pipettieren': 0.01,
+
+noise_level = {
+    'fehler_wage': 0.001,
+    'fehler_pipettieren': 0.02,
     'fehler_time_points': 0.001,
-    'fehler_od': 0.002
+    'fehler_od': 0.007
 }
-
 num_iterations = 1000
 
 mc_reaction1_noisy_plate_reader = monte_carlo_parameter_estimation(data, 
@@ -61,16 +64,12 @@ mc_reaction1_noisy_plate_reader = monte_carlo_parameter_estimation(data,
                                                             initial_guess, noise_level = noise_level, num_iterations= num_iterations)
 
 
-df_reaction1 = save_results(mc_reaction1_noisy_plate_reader, parameters, save_path=os.path.join(RESULTS_PATH, "experimental_reaction1_experiement_results.csv"))
+df_reaction1 = save_results(mc_reaction1_noisy_plate_reader, parameters, save_path=os.path.join(RESULTS_PATH, "MC_reaction1_full_experiment_PD.csv"))
 
 print_monte_carlo_info(parameters, df_reaction1)
 
-corner_plot_monte_carlo_results(df_reaction1,parameters)
-correlation_matrix_plot(df_reaction1,parameters)
-
-#Perform Monte Carlo parameter estimation with experimental data
-
-noise_level = 0.004
+# Perform Monte Carlo parameter estimation with experimental data
+noise_level = (noise_level["fehler_pipettieren"] + noise_level["fehler_od"] + noise_level["fehler_time_points"])/3
 
 mc_reaction1_noisy_plate_reader = monte_carlo_parameter_estimation(data,
                                                             cal_data, substrates, cal_parameters,
@@ -78,13 +77,7 @@ mc_reaction1_noisy_plate_reader = monte_carlo_parameter_estimation(data,
                                                             initial_guess, noise_level = noise_level, num_iterations = num_iterations)
 
 
-df_reaction1_2= save_results(mc_reaction1_noisy_plate_reader, parameters, save_path=os.path.join(RESULTS_PATH, "experimental_reaction1_noisy_rates_results_PD.csv"))
+df_reaction1_2= save_results(mc_reaction1_noisy_plate_reader, parameters, save_path=os.path.join(RESULTS_PATH, "MC_reaction1_rate_noise_PD.csv"))
 
 
 print_monte_carlo_info(parameters, df_reaction1_2)
-
-corner_plot_monte_carlo_results(df_reaction1_2,parameters)
-correlation_matrix_plot(df_reaction1_2,parameters)
-
-compare_corner_plots([df_reaction1, df_reaction1_2], parameters)
-compare_error_ellipses(df_reaction1, df_reaction1_2, ["Vmax", "Km1"])

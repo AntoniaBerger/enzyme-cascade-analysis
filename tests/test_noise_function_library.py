@@ -284,6 +284,124 @@ def test_noise_function_reproducibility():
     print("✓ test_noise_function_reproducibility passed: Noise functions properly randomized")
 
 
+def test_full_experiment_processing_with_noise_reproducibility():
+    """Test reproducibility of full_experiment_processing_with_noise function."""
+    data, cal_data, processed_data, substrates, cal_parameters = create_test_data()
+    
+    noise_levels = {
+        'fehler_wage': 0.002,
+        'fehler_pipettieren': 0.01,
+        'fehler_time_points': 5.0,
+        'fehler_od': 0.005
+    }
+    
+    # Test reproducibility with same seed
+    np.random.seed(42)
+    result1 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, noise_levels)
+    
+    np.random.seed(42) 
+    result2 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, noise_levels)
+    
+    # With same seed, should get identical results
+    pd.testing.assert_frame_equal(result1, result2, check_dtype=False)
+    print("  ✓ Same seed produces identical results")
+    
+    # Test that different seeds give different results
+    np.random.seed(123)
+    result3 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, noise_levels)
+    
+    # Should have same structure but different values
+    assert list(result1.columns) == list(result3.columns)
+    assert len(result1) == len(result3)
+    
+    # Check that at least some values are different (with high probability)
+    activities1 = result1['activity_U/mg'].values
+    activities3 = result3['activity_U/mg'].values
+    activity_differences = np.abs(activities1 - activities3)
+    
+    # Check substrate concentrations might also be different due to pipetting errors
+    substrate_differences_found = False
+    for substrate in substrates:
+        values1 = result1[substrate].values
+        values3 = result3[substrate].values
+        if not np.allclose(values1, values3, atol=1e-10):
+            substrate_differences_found = True
+            break
+    
+    # Either activities or substrate concentrations should be different
+    has_differences = np.any(activity_differences > 1e-10) or substrate_differences_found
+    assert has_differences, "Different seeds should produce different noise effects"
+    print("  ✓ Different seeds produce different results")
+    
+    # Test with zero noise for deterministic baseline
+    zero_noise_levels = {
+        'fehler_wage': 0.0,
+        'fehler_pipettieren': 0.0,
+        'fehler_time_points': 0.0,
+        'fehler_od': 0.0
+    }
+    
+    np.random.seed(42)
+    result_zero_1 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, zero_noise_levels)
+    
+    np.random.seed(999)  # Different seed
+    result_zero_2 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, zero_noise_levels)
+    
+    # With zero noise, results should be identical regardless of seed
+    pd.testing.assert_frame_equal(result_zero_1, result_zero_2, check_dtype=False)
+    print("  ✓ Zero noise produces identical results regardless of seed")
+    
+    # Test individual noise components
+    print("  Testing individual noise component effects:")
+    
+    # Only time point noise
+    time_noise_only = {
+        'fehler_wage': 0.0,
+        'fehler_pipettieren': 0.0,
+        'fehler_time_points': 10.0,
+        'fehler_od': 0.0
+    }
+    
+    np.random.seed(42)
+    result_time_1 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, time_noise_only)
+    np.random.seed(42)
+    result_time_2 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, time_noise_only)
+    pd.testing.assert_frame_equal(result_time_1, result_time_2, check_dtype=False)
+    print("    ✓ Time point noise is reproducible")
+    
+    # Only OD noise
+    od_noise_only = {
+        'fehler_wage': 0.0,
+        'fehler_pipettieren': 0.0,
+        'fehler_time_points': 0.0,
+        'fehler_od': 0.02
+    }
+    
+    np.random.seed(42)
+    result_od_1 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, od_noise_only)
+    np.random.seed(42)
+    result_od_2 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, od_noise_only)
+    pd.testing.assert_frame_equal(result_od_1, result_od_2, check_dtype=False)
+    print("    ✓ OD measurement noise is reproducible")
+    
+    # Only pipetting noise
+    pipette_noise_only = {
+        'fehler_wage': 0.0,
+        'fehler_pipettieren': 0.05,
+        'fehler_time_points': 0.0,
+        'fehler_od': 0.0
+    }
+    
+    np.random.seed(42)
+    result_pip_1 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, pipette_noise_only)
+    np.random.seed(42)
+    result_pip_2 = full_experiment_processing_with_noise(data, cal_data, substrates, cal_parameters, pipette_noise_only)
+    pd.testing.assert_frame_equal(result_pip_1, result_pip_2, check_dtype=False)
+    print("    ✓ Pipetting noise is reproducible")
+    
+    print("✓ test_full_experiment_processing_with_noise_reproducibility passed: All noise components are properly randomized and reproducible")
+
+
 def test_error_edge_cases():
     """Test noise functions with edge cases and potential error conditions."""
     data, cal_data, processed_data, substrates, cal_parameters = create_test_data()
@@ -331,6 +449,7 @@ def run_all_tests():
         test_full_experiment_processing_with_noise()
         test_noise_levels_validation()
         test_noise_function_reproducibility()
+        test_full_experiment_processing_with_noise_reproducibility()
         test_error_edge_cases()
         
         print("\n🎉 All noise function tests passed!")

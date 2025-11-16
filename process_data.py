@@ -309,11 +309,15 @@ if __name__ == "__main__":
     Beispiel-Ausführung zur Demonstration der Datenverarbeitung.
     """
 
-    data_path = r"C:\Users\berger\Documents\Projekts\enzyme-cascade-analysis\example_reactions\dortmund_system\experimental_data\Reaction1\r_1_PD_NAD.csv"
+    data_path = r"C:\Users\berger\Documents\Projekts\enzyme-cascade-analysis\example_reactions\dortmund_system\documentation\experimental_data\Reaction3\r_3_NAD.csv"
     data = pd.read_csv(data_path)
     keys = [dp for dp in data.columns if "data_" in dp]
 
     data = data[keys]
 
+    std = []
     for i in range(0, len(data.values), 2):
         print(get_noise_level_od(data,i,i+1))
+        std.append( get_noise_level_od(data,i,i+1))
+
+    print("Durchschnittliches Rauschen OD:", np.mean(std))

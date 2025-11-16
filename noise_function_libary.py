@@ -74,7 +74,7 @@ def full_experiment_processing_with_noise(data, cal_data, substrates, cal_parame
     n = len(concentration_data_noisy)
     
     for i in range(0, n): 
-        concentration_data_noisy[i] = (concentration_data_noisy[i] + ( np.random.normal(0, fehler_pipettieren) * 2*i)) 
+        concentration_data_noisy[i] = (concentration_data_noisy[i] + np.random.normal(0, fehler_pipettieren)*2*i)
 
     data_noisy[substrates] = concentration_data_noisy
 
