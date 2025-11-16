@@ -21,13 +21,13 @@ RESULTS_PATH = "C:\\Users\\berger\\Documents\\Projekts\\enzyme-cascade-analysis\
 np.random.seed(42)
 
 # Define model
-parameters = ['Vmax', 'Km1', 'Km2', 'Ki']
+parameters = ['Vmax', 'Km1', 'Ki']
 substrates = ["PD_mM"]
 
 def michaelis_menten_inhibition_PD(S, *parameters):
     S1 = S
-    Vmax, Km1, Km2, Ki = parameters
-    return (Vmax * 300 * 0.6) / ((Km1 * (1+ S1/Ki) + 300) * (Km2 + 0.6))
+    Vmax, Km1, Ki = parameters
+    return (Vmax * 300 * 0.6) / ((Km1 * (1+ S1/Ki) + 300))
 
 # Perform Monte Carlo parameter estimation with experimental data
 data = pd.read_csv(os.path.join(EXPERIMENTAL_DATA_PATH, "Reaction2", "r_2_PD.csv"))
@@ -39,7 +39,7 @@ cal_parameters = {
     "c_prod": 2.15    # mg/mL
 }
 
-initial_guess = [3.2, 90, 3, 1]
+initial_guess = [10, 60, 10]
 
 noise_level = {
     'fehler_wage': 0.02,
@@ -87,7 +87,7 @@ mc_reaction2_noisy_rate = monte_carlo_parameter_estimation(
 df_reaction2_noisy_rate = save_results(
     mc_reaction2_noisy_rate, 
     parameters, 
-    save_path=os.path.join(RESULTS_PATH, "MC_reaction2_full_experiment_PD.csv")
+    save_path=os.path.join(RESULTS_PATH, "MC_reaction2_rate_noise_PD.csv")
 )
 
 print_monte_carlo_info(parameters, df_reaction2_noisy_rate)

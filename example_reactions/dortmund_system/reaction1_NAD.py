@@ -14,7 +14,7 @@ import pandas as pd
 
 
 # experimental data
-EXPERIMENTAL_DATA_PATH = r"C:\\Users\\berger\\Documents\\Projekts\\enzyme-cascade-analysis\\example_reactions\\dortmund_system\\experimental_data"
+EXPERIMENTAL_DATA_PATH = r"C:\\Users\\berger\\Documents\\Projekts\\enzyme-cascade-analysis\\example_reactions\\dortmund_system\\documentation\\experimental_data"
 
 # processed data
 PROCESSED_DATA_PATH = r"C:\\Users\\berger\\Documents\\Projekts\\enzyme-cascade-analysis\\example_reactions\\dortmund_system\\processed_data"
@@ -27,14 +27,14 @@ np.random.seed(42)
 
 # define model
     
-parameters = ['Vmax', 'Km1', 'Km2']
+parameters = ['Vmax', 'Km1']
 substrates = ["NAD_mM"]
 
 def michaelis_menten(S, *parameters):
     S1 = S
-    Vmax, Km1, Km2 = parameters
+    Vmax, Km1 = parameters
 
-    return (Vmax * S1 * 500) / ((Km1 + 500) * (Km2 + S1))
+    return (Vmax * S1) / ((Km1 + 500))
 
  # Perform Monte Carlo parameter estimation with experimental data
 
@@ -47,7 +47,7 @@ cal_parameters = {
     "c_prod": 2.2108    # mg/mL
 }
 
-initial_guess = [0.1, 80, 1]
+initial_guess = [0.1, 80]
 
 
 noise_level = {

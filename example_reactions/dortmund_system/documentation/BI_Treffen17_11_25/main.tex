@@ -17,7 +17,7 @@
 
 % Titel-Informationen
 \title{Enzym-Kaskaden-Analyse}
-\subtitle{Parameterbestimmung und Fehlerpfortpflanzung}
+\subtitle{Parameterbestimmung und Fehlerfortpflanzung}
 \author{Antonia Berger}
 \date{17. November 2025}
 
@@ -37,8 +37,8 @@
             \includegraphics[width=0.7\linewidth]{Figure/Aufbruch_Zusammenfassung(1).png}
         \end{figure}}
     \begin{itemize}
-        \item Modellierung nicht linearer Austausch­raten zwischen flüssig-flüssig Phasen
-        \item Rechnen von Austauschraten und Reactionen im equilibrierten Zustand
+        \item Modellierung nicht linearer Austauschraten zwischen flüssig-flüssig Phasen
+        \item Rechnen von Austauschraten und Reaktionen im equilibrierten Zustand
     \end{itemize}
 \end{frame}
 \begin{frame}{Überblick}
@@ -64,18 +64,18 @@
     \end{figure}
 
        \small{ \begin{align*}
-            r_1 &= \frac{V_{max1} [PD] [NAD]}{(K_{m11} + [PD])(K_{m12} + [NAD])}\\
-            r_2 &= \frac{V_{max2} [NADH][HD]}{(K_{m21}(1+\frac{[PD]}{Ki}) + [HD]) (K_{m22} + [NADH])}\\
-            r_3 &= \frac{V_{max1} [HD] [NAD]}{(K_{m31} + [HD])(K_{m32} + [NAD])}\\
+            r_1 &= \frac{V_{\max1} [PD] [NAD]}{(K_{m11} + [PD])(K_{m12} + [NAD])}\\
+            r_2 &= \frac{V_{\max2} [NADH][HD]}{(K_{m21}(1+\frac{[PD]}{Ki}) + [HD]) (K_{m22} + [NADH])}\\
+            r_3 &= \frac{V_{\max3} [HD] [NAD]}{(K_{m31} + [HD])(K_{m32} + [NAD])}\\
         \end{align*}}
     }
     \only<2-3>{
     \begin{minipage}{0.45\textwidth}
     \begin{itemize}
-        \item Multi Substrat Michaelis Menten Kinetik
+        \item Multi-Substrat Michaelis-Menten Kinetik
         \item Verschiedene Inhibitor Typen
         \item In CADET implementiert \\
-        $ \to $ In verschiednen Pioprocesse anwendbar \\
+        $ \to $ In verschiedenen Prozessen anwendbar \\
         $ \to $ Verwendbar mit anderen Reaktionsmodellen \\
         $ \to $ Sensitivitätsanalyse möglich
     \end{itemize}
@@ -91,7 +91,7 @@
         \nu_{j} = v_{\mathrm{max},j} \prod_{i = 1}^{N_{sub,j}} \nu_{i,j} = v_{\mathrm{max},j} \prod_{i = 1}^{N_{sub,j}} \frac{ c_{i,j}}{K_{\mathrm{M}_{i,j}} + c_{i,j}}
     \end{equation*}}
     
-    \only<3>{\begin{block}{Zum Beispiel: Kompetitive Inhibitor}
+    \only<3>{\begin{block}{Zum Beispiel: Kompetitiver Inhibitor}
         \begin{equation*}
         \only<3>{\nu_{i,j} =  \frac{c_{i,j}}{K_{\mathrm{M}_{i,j}}\,(1 + \sum_{k \in \mathcal{I}_{i,j}} \frac{c_{k}}{K^{c}_{I_{k}}}) + c_{i,j}}}
         \end{equation*}
@@ -111,7 +111,7 @@
     \begin{itemize}
         \item Mit Julian zusammen
         \item Gegeben Roh-Daten von Enzymkinetik Experimenten
-        \item Analyse von der Parameterbestimmung mit beruecksichtigung Messfehlern
+        \item Analyse von der Parameterbestimmung mit Berücksichtigung von Messfehlern
     \end{itemize}
     \vfill
     \textbf{Frage:} Wie gut sind meine Parameterbestimmungen unter Berücksichtigung von Messfehlern?
@@ -127,20 +127,20 @@
 \hspace{0.5cm}
 \begin{minipage}{0.50\textwidth}
 \centering
-     \begin{block}{Experimentaler Aufblauf}
+     \begin{block}{Experimenteller Aufbau}
        \begin{equation*}
            \min_{\theta} \sum_i \left(\frac{f(c_i,\theta) - r_i}{ \sigma_i}\right)^2
        \end{equation*}
        \begin{itemize}
         \item $c_i$: Konzentrationsmessung zum Zeitpunkt $i$
-        \item $f(c_i,\theta) = \frac{c_i \cdot Vmax}{c_i + K_m}$: Modelfunktion
-        \item $\theta = (Vmax, K_m)$: Parameter
+        \item $f(c_i,\theta) = \frac{c_i \cdot V_{\max}}{c_i + K_m}$: Modellfunktion
+        \item $\theta = (V_{\max}, K_m)$: Parameter
         \item $\sigma_i$: Standardabweichung der Messung
        \end{itemize}
    \end{block}
 \end{minipage}
 \begin{block}{Beobachtung}
-    Durch den Experimenten Aublauf können verschiedene Arten von Messfehlern auftreten.
+    Durch den experimentellen Ablauf können verschiedene Arten von Messfehlern auftreten.
 \end{block}
 \end{frame}
 \begin{frame}{Berechnung von Reaktionsraten}
@@ -154,11 +154,11 @@
     \end{figure}}
     \begin{block}{Raten Berechnung}
         \begin{equation*}
-            r = A [U/mg] = \frac{ m_{od} [A_{340}/s]\cdot 60 s/min \cdot \phi_{well} \cdot \phi_{prod} }{ m_{cal} [ A_{340} \mu /M] \cdot c_{prod}[mg/L]}
+            r = A [\text{U/mg}] = \frac{ m_{od} [\text{A}_{340}/\text{s}]\cdot 60 \text{ s/min} \cdot \phi_{well} \cdot \phi_{prod} }{ m_{cal} [ \text{A}_{340} \mu \text{M}] \cdot c_{prod}[\text{mg/L}]}
         \end{equation*}
     \end{block}
 \end{frame}
-\begin{frame}{Fehler Beruecksichtigung}
+\begin{frame}{Fehler Berücksichtigung}
     \begin{minipage}{0.6\textwidth}
     \begin{block}{Ansatz}
     \begin{itemize}
@@ -181,21 +181,161 @@
     \end{minipage}
   
 \end{frame}
-\begin{frame}{Ergebnisse Reaction 1 und 3}
-    
+\begin{frame}{Ergebnisse Reaktion 1}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1.0\linewidth]{Plots/reaction1_PD_full_vs_rate.png}
+        \end{figure}
+    \end{minipage}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1.0\linewidth]{Plots/reaction1_NAD_full_vs_rate.png}
+        \end{figure}
+    \end{minipage}
+    \begin{minipage}{0.425\textwidth}
+        \begin{block}{Annahmen}
+            \begin{itemize}
+                \item 1000 Monte Carlo Iterationen
+                \item Pipettierfehler: 2 \%
+                \item Plate Reader Fehler: 0.7 \%
+            \end{itemize} 
+        \end{block}
+    \end{minipage}
+    \hspace{0.5cm}
+    \begin{minipage}{0.475\textwidth}
+        \begin{block}{Ergebnisse}
+            \centering
+            \scriptsize{\begin{tabular}{|l|c|c|}
+                        \hline
+                        Param. & Wert (Vollständig) & Wert (Rate) \\
+                        \hline
+                        $V_{\max1}$ & 0.04 ± 0.0008 & 0.04 ± 0.009 \\
+                        $K_{m11}$ & 77.88 ± 0.029 & 77.87 ± 0.16 \\
+                        $K_{m12}$ & 70.24 ± 3.73& 80.62 ± 50.87  \\
+                        \hline
+                        \end{tabular}}
+        \end{block}
+    \end{minipage}
 \end{frame}
-\begin{frame}{Ergebnisse Reaction 2}
-
+\begin{frame}{Ergebnisse Reaktion 3}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1.0\linewidth]{Plots/reaction3_LACTOL_full_vs_rate.png}
+        \end{figure}
+    \end{minipage}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1.0\linewidth]{Plots/reaction3_NAD_full_vs_rate.png}
+        \end{figure}
+    \end{minipage}
+    \begin{minipage}{0.45\textwidth}
+        \begin{block}{Annahmen}
+             \begin{itemize}
+                \item 1000 Monte Carlo Iterationen
+                \item Pipettierfehler: 2 \%
+                \item Plate Reader Fehler: 0.8 \%
+            \end{itemize} 
+            
+        \end{block}
+    \end{minipage}
+    \hspace{1cm}
+    \begin{minipage}{0.45\textwidth}
+       \begin{block}{Ergebnisse}
+            \centering
+            \scriptsize{\begin{tabular}{|l|c|c|}
+                        \hline
+                        Param. & Wert (Vollständig) & Wert (Rate) \\
+                        \hline
+                        $V_{\max3}$ & 1.734 ± 0.006 & 1.73 ± 0.006 \\
+                        $K_{m31}$ & 61.93 ± 0.89 & 61.89 ± 0.931 \\
+                        $K_{m32}$ & 3.38 ± 0.59 & 3.268 ± 0.08  \\
+                        \hline
+                        \end{tabular}}
+        \end{block}
+    \end{minipage}
 \end{frame}
-\begin{frame}{Simulationsergebnisse mit geschätzden Parametern}
+\begin{frame}{Ergebnisse Reaktion 2 I}
+\begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1.0\linewidth]{Plots/reaction2_HP_full_vs_rate.png}
+        \end{figure}
+    \end{minipage}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=1.0\linewidth]{Plots/reaction2_NADH_full_vs_rate.png}
+        \end{figure}
+    \end{minipage}
+    \begin{minipage}{0.425\textwidth}
+        \begin{block}{Annahmen}
+            \begin{itemize}
+                \item 1000 Monte Carlo Iterationen
+                \item Pipettierfehler: 2 \%
+                \item Plate Reader Fehler: 0.5 \%
+            \end{itemize} 
+        \end{block}
+    \end{minipage}
+    \hspace{0.5cm}
+    \begin{minipage}{0.5\textwidth}
+        \begin{block}{Ergebnisse}
+            \centering
+            \scriptsize{\begin{tabular}{|l|c|c|}
+                        \hline
+                        Parameter & Wert & Wert \\
+                        \hline
+                        $V_{max2}$ [U/mg] & 0.57 ± 0.03 &  0.57 ± 0.02 \\
+                        $K_{m21}$ [mM] & 108.7 ± 18.4  & 107.8 ± 11.5 \\
+                        $K_{m22}$ [mM] & 66.93 ± 91.73 & 2.14 ± 0.71 \\
+                        $K_i$ [mM] & 119.82 ± 3.76 & 119.78 ± 4.74\\
+                        \hline
+                        \end{tabular}}
+        \end{block}
+\end{minipage}
+\end{frame}
+\begin{frame}{Ergebnisse Reaktion 2 II}
+    \begin{minipage}{0.5\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.8\linewidth]{Plots/reaction2_PD_full_vs_rate.png}
+        \end{figure}
+    \end{minipage}
+    \hspace{0.5cm}
+    \begin{minipage}{0.4\textwidth}
+        \begin{block}{Annahmen}
+            \begin{itemize}
+                \item 1000 Monte Carlo Iterationen
+                \item Pipettierfehler: 2 \%
+                \item Plate Reader Fehler: 0.5 \%
+            \end{itemize}
+        \end{block}
+        
+    \end{minipage}
+\begin{block}{Ergebnisse}
+            \centering
+            \scriptsize{\begin{tabular}{|l|c|c|}
+                        \hline
+                        Parameter & Wert & Wert \\
+                        \hline
+                        $V_{max2}$ [U/mg] & 0.57 ± 0.03 &  0.57 ± 0.02 \\
+                        $K_{m21}$ [mM] & 108.7 ± 18.4  & 107.8 ± 11.5 \\
+                        $K_{m22}$ [mM] & 66.93 ± 91.73 & 2.14 ± 0.71 \\
+                        $K_i$ [mM] & 119.82 ± 3.76 & 119.78 ± 4.74\\
+                        \hline
+                        \end{tabular}}
+        \end{block}
 \end{frame}
 \begin{frame}{Nächste Schritte}
     \begin{itemize}
-        \item Ergebnisse analysieren diskutieren und adaptieren
+        \item Ergebnisse analysieren, diskutieren und adaptieren
         \begin{itemize}
             \item Sind die Fehlerannahmen realistisch? % Relatives oder absolutes Rauschen?
             \item Sind die Fehlergrößen realistisch?
-            \item Mehrdimensionale Parameterabschätzung
+            \item Parameterschätzungen mit Multi-Substrat Michaelis-Menten Kinetik
         \end{itemize}
         \item Enzyminaktivierung integrieren
     \end{itemize}
@@ -213,8 +353,8 @@
     \begin{minipage}{0.5\textwidth}
         \vspace{1.5cm}
         \begin{itemize}
-        \item Programmierbare Bioreaktor als Prototype
-        \item Tobias Jülch (IB ) Test Process aufsetzten
+        \item Programmierbarer Bioreaktor als Prototyp
+        \item Tobias Jülch (IB) Testprozess aufsetzen
         \item Jannis Bergmann (Student) Datenmanagement und CADET Schnittstelle entwickeln
     \end{itemize}
     \end{minipage}}
@@ -242,4 +382,59 @@
     \end{thebibliography}
     
 \end{frame}
+
+\begin{frame}{Backup: CADET Simulation Vergleich}
+    \begin{figure}
+        \centering
+        \includegraphics[width=1.0\linewidth]{Plots/cadet_simulation_full_vs_rate_noise.png}
+    \end{figure}
+\end{frame}
+\begin{frame}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.75\linewidth]{Plots/compare_ellipse_reaction1_NAD_full_vs_rate_noise_vmax_Km2.png}
+        \end{figure}        
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.75\linewidth]{Plots/compare_ellipse_reaction1_PD_full_vs_rate_noise_vmax_Km2.png}
+        \end{figure}
+
+    \end{minipage}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.75\linewidth]{Plots/compare_ellipse_reaction2_HP_full_vs_rate_noise_vmax_Km2.png}
+        \end{figure}        
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.75\linewidth]{Plots/compare_ellipse_reaction2_NADH_full_vs_rate_noise_vmax_Km2.png}
+        \end{figure}
+    \end{minipage}
+\end{frame}
+\begin{frame}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.75\linewidth]{Plots/compare_ellipse_reaction2_PD_full_vs_rate_noise_vmax_Km2.png}
+        \end{figure}        
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.75\linewidth]{Plots/compare_ellipse_reaction2_PD_full_vs_rate_noise_vmax_Kmi.png}
+        \end{figure}
+
+    \end{minipage}
+    \begin{minipage}{0.45\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.75\linewidth]{Plots/compare_ellipse_reaction3_LACTOL_full_vs_rate_noise_vmax_Km2.png}
+        \end{figure}        
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.75\linewidth]{Plots/compare_ellipse_reaction3_NAD_full_vs_rate_noise_vmax_Km2.png}
+        \end{figure}
+    \end{minipage}
+\end{frame}
+
+
 \end{document}

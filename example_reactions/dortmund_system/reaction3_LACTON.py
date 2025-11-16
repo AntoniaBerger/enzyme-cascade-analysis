@@ -27,14 +27,14 @@ np.random.seed(42)
 
 # define model
     
-parameters = ['Vmax', 'Km1', 'Km2']
+parameters = ['Vmax', 'Km1']
 substrates = ["LACTOL_mM"]
 
 def michaelis_menten(S, *parameters):
     S1 = S
-    Vmax, Km1, Km2 = parameters
+    Vmax, Km1 = parameters
 
-    return (Vmax * S1 * 5) / ((Km1 + S1) * (Km2 + 5))
+    return (Vmax * S1 ) / ((Km1 + S1))
 
  # Perform Monte Carlo parameter estimation with experimental data
 
@@ -47,7 +47,7 @@ cal_parameters = {
     "c_prod": 2.15    # mg/mL
 }
 
-initial_guess = [2.3, 62, 2.8]
+initial_guess = [2.3, 62]
 
 
 noise_level = {
@@ -71,13 +71,13 @@ print_monte_carlo_info(parameters, df_reaction1)
 # Perform Monte Carlo parameter estimation with experimental data
 noise_level = (noise_level["fehler_pipettieren"] + noise_level["fehler_od"] + noise_level["fehler_time_points"])/3
 
-mc_reaction1_noisy_plate_reader = monte_carlo_parameter_estimation(data,
+mc_reaction1_noisy_plate_reader2 = monte_carlo_parameter_estimation(data,
                                                             cal_data, substrates, cal_parameters,
                                                             michaelis_menten, add_noise_rate,
                                                             initial_guess, noise_level = noise_level, num_iterations = num_iterations)
 
 
-df_reaction1_2= save_results(mc_reaction1_noisy_plate_reader, parameters, save_path=os.path.join(RESULTS_PATH, "MC_reaction3_rate_noise_LACTOL.csv"))
+df_reaction1_2= save_results(mc_reaction1_noisy_plate_reader2, parameters, save_path=os.path.join(RESULTS_PATH, "MC_reaction3_rate_noise_LACTOL.csv"))
 
 
 print_monte_carlo_info(parameters, df_reaction1_2)

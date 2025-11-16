@@ -21,13 +21,13 @@ RESULTS_PATH = "C:\\Users\\berger\\Documents\\Projekts\\enzyme-cascade-analysis\
 np.random.seed(42)
 
 # Define model
-parameters = ['Vmax', 'Km1', 'Km2']
+parameters = ['Vmax', 'Km2']
 substrates = ["NADH_mM"]
 
 def michaelis_menten_inhibition_NADH(S, *parameters):
     S1 = S
-    Vmax, Km1, Km2 = parameters
-    return (Vmax * S1 * 0.6) / ((Km1 + S1) * (Km2 + 0.6))
+    Vmax, Km2 = parameters
+    return (Vmax * S1 ) / (Km2 + S1)
 
 # Perform Monte Carlo parameter estimation with experimental data
 data = pd.read_csv(os.path.join(EXPERIMENTAL_DATA_PATH, "Reaction2", "r_2_NADH.csv"))
@@ -39,7 +39,7 @@ cal_parameters = {
     "c_prod": 2.15    # mg/mL
 }
 
-initial_guess = [3.2, 90, 3]
+initial_guess = [3.2, 60]
 
 noise_level = {
     'fehler_wage': 0.02,
@@ -54,9 +54,9 @@ mc_reaction2_noisy_plate_reader = monte_carlo_parameter_estimation(
     cal_data, 
     substrates, 
     cal_parameters,
-    michaelis_menten_inhibition_NADH, 
+    michaelis_menten_inhibition_NADH,
     full_experiment_processing_with_noise, 
-    initial_guess, 
+    initial_guess = initial_guess, 
     noise_level = noise_level, 
     num_iterations = num_iterations
 )
@@ -79,7 +79,7 @@ mc_reaction2_noisy_rate = monte_carlo_parameter_estimation(
     cal_parameters,
     michaelis_menten_inhibition_NADH, 
     add_noise_rate, 
-    initial_guess,
+    initial_guess = initial_guess,
     noise_level = noise_level, 
     num_iterations = num_iterations
 )
@@ -87,7 +87,7 @@ mc_reaction2_noisy_rate = monte_carlo_parameter_estimation(
 df_reaction2_noisy_rate = save_results(
     mc_reaction2_noisy_rate, 
     parameters, 
-    save_path=os.path.join(RESULTS_PATH, "MC_reaction2_full_experiment_NADH.csv")
+    save_path=os.path.join(RESULTS_PATH, "MC_reaction2_rate_noise_NADH.csv")
 )
 
 
